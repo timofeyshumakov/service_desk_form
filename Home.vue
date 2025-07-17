@@ -56,7 +56,7 @@
         <!-- Links -->
         <v-text-field
           v-model="newLink"
-          label="Ссылка"
+          label="Ссылки"
           append-icon="mdi-plus"
           @click:append="addLink"
           @keyup.enter="addLink"
@@ -402,19 +402,19 @@ const removeLink = (index) => {
 
 
 const urgencyOptions = [
-  { title: '1 – не срочно', value: 1 },
-  { title: '2 – срочно', value: 2 }
+  { title: '1 – не срочно', value: '1 – не срочно' },
+  { title: '2 – срочно', value: '2 – срочно' }
 ];
 
 const importanceOptions = [
-  { title: '1 – менее важно', value: 1 },
-  { title: '2 – более важно', value: 2 }
+  { title: '1 – менее важно', value: '1 – менее важно' },
+  { title: '2 – более важно', value: '2 – более важно' }
 ];
 
 const threatsOptions = [
-  { title: '0 – устранение негативного влияния', value: 1 },
-  { title: '1 – улучшение влияет на процесс', value: 2 },
-  { title: '2 – улучшение влияет на компанию', value: 3 }
+  { title: '0 – устранение негативного влияния', value: '0 – устранение негативного влияния' },
+  { title: '1 – улучшение влияет на процесс', value: '1 – улучшение влияет на процесс' },
+  { title: '2 – улучшение влияет на компанию', value: '2 – улучшение влияет на компанию' }
 ];
 
 //const b64Files = ref([]);
@@ -425,10 +425,7 @@ const codeFiles = async(files) => {
       try {
         for (const file of files) {
           const base64 = await fileToBase64(file);
-          encodedFiles.push({
-            name: file.name,
-            base64: base64.split(',')[1] || base64 // Удаляем префикс data URL если есть
-          });
+          encodedFiles.push([file.name, base64.split(',')[1] || base64]);
         }
         return encodedFiles;
       } catch (error) {
@@ -469,6 +466,23 @@ const completeStepper = async() => {
         )
       });
 
+const oldValues = [
+  form.value.direction && `Направление: ${form.value.direction}`,
+  form.value.requestType && `Тип заявки: ${form.value.requestType}`,
+  form.value.category && `Категория: ${form.value.category}`,
+  form.value.subcategory && `Подкатегория: ${form.value.subcategory}`,
+  form.value.description && `Описание: ${form.value.description}`,
+  form.value.links.length > 0 && `Ссылки: ${form.value.links.join(', ')}`,
+  project.value && `Проект[1С]: ${project.value}`,
+  urgency.value && `Срочность[1С]: ${urgency.value}`,
+  importance.value && `Важность[1С]: ${importance.value}`,
+  threatsOpportunities.value && `Угрозы/Возможности[1С]: ${threatsOpportunities.value}`
+]
+  .filter(Boolean) // Удаляем все пустые (false) значения
+  .join('\n'); // Объединяем оставшиеся значения с переносом строки
+
+console.log(oldValues); // Выводим результат
+
     await new Promise((resolve) => {
       BX24.callMethod(
         'crm.item.add', {
@@ -478,7 +492,17 @@ const completeStepper = async() => {
               'title': 'test',
               'comments': '123',
               "categoryId": 69,
-              "ufCrm47_1706781047803": "" //направление
+              //"ufCrm47_1706781047803": "", //направление
+              'ufCrm47_1698839820': b64Files, //Файлы / скрины
+              /*
+              UF_CRM_47_1752218749933, //Важность [1С]
+              UF_CRM_47_1752218774249, //Срочность [1С]
+UF_CRM_47_1752218834398, //Угрозы/Возможности [1С]
+
+UF_CRM_47_1752218606665, //Проект [1C]
+UF_CRM_47_1743432030, //ПРИОРИТЕТ
+UF_CRM_47_1706781277387, //Ссылка для уточнения (А)
+*/
             }
         }, (res) => {
             form.value = {
@@ -491,11 +515,11 @@ const completeStepper = async() => {
               files: [],
             };
             step.value = 1;
+            newLink.value = '';
             project.value = '';
             urgency.value = null;
             importance.value = null;
             threatsOpportunities.value = null;
-            incidentType.value = null;
             isValid.value = false;
             itemId = res.data().item.id;
             resolve();
@@ -511,20 +535,19 @@ const completeStepper = async() => {
             {
                 "ENTITY_ID": itemId,
                 "ENTITY_TYPE": "DYNAMIC_172",
-                "COMMENT": "Подтвердить закупку по почте!",
+                "COMMENT": oldValues,
             }
         }
       );
       resolve();
     });
-
+    successDialog.value = true;
   }
   } catch (error) {
     errorDisplay.value = error;
     errorDialog.value = true;
   } finally {
     isLoading.value = false;
-    successDialog.value = true;
   }
 };
 
