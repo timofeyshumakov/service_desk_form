@@ -130,24 +130,6 @@
         <v-btn class="reports-button" @click="reportsDialog = true">Отчеты</v-btn>
       </v-container>
     </v-main>
-      <v-dialog v-model="reportsDialog">
-        <v-card>
-          <v-card-title class="success white--text">Отчет по заявкам  категории ИТ
-          <v-btn icon small absolute right top @click="reportsDialog = false" class="ma-1 close-report">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-          </v-card-title>
-          <v-card-text>
-            <TheForm @update-data="handleDataUpdate" :users="users"></TheForm>
-            <v-data-table :items="pivotTableDate" :headers="pivotTableHeaders"></v-data-table>
-            <v-data-table :items="itemsTableDate" :headers="itemsTableHeaders"></v-data-table>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn color="primary" text @click="reportsDialog = false">закрыть</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
       <v-dialog v-model="successDialog" max-width="500" class="successDialog">
         <v-card>
           <v-card-title class="success white--text">Успешно выполнено!</v-card-title>
@@ -194,6 +176,137 @@
           </v-card-text>
         </v-card>
       </v-dialog>
+  <!-- Диалог выбора отчетов -->
+  <v-dialog v-model="reportsDialog" max-width="600">
+    <v-card>
+      <v-card-title class="success white--text d-flex justify-space-between align-center">
+        Выбор отчета
+        <v-btn icon small @click="reportsDialog = false" class="ma-1">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </v-card-title>
+      
+      <v-card-text class="pa-6">
+        <div class="reports-menu">
+          <v-card 
+            v-for="report in reports" 
+            :key="report.id"
+            class="report-card mb-4"
+            :class="{ 'report-card-active': selectedReport === report.id }"
+            @click="openReport(report.id)"
+            hover
+          >
+            <v-card-text class="d-flex align-center">
+              <v-icon 
+                :color="selectedReport === report.id ? 'primary' : 'grey'"
+                class="mr-4"
+                size="32"
+              >
+                {{ report.icon }}
+              </v-icon>
+              <div>
+                <h3 class="report-title">{{ report.title }}</h3>
+                <p class="report-description">{{ report.description }}</p>
+              </div>
+            </v-card-text>
+          </v-card>
+        </div>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
+
+  <!-- Диалог отчета 1 (существующий) -->
+  <v-dialog v-model="report1Dialog" max-width="1200" scrollable>
+    <v-card>
+      <v-card-title class="success white--text d-flex justify-space-between align-center">
+        <div class="d-flex align-center">
+          <v-btn icon @click="backToReportsMenu" class="mr-2">
+            <v-icon>mdi-arrow-left</v-icon>
+          </v-btn>
+          Отчет по заявкам категории ИТ
+        </div>
+        <v-btn icon small @click="report1Dialog = false" class="ma-1">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </v-card-title>
+      
+      <v-card-text>
+<TheForm @update-data="handleInvoicesData" :users="users"></TheForm>
+            <v-data-table :items="itemsTableDate" :headers="itemsTableHeaders" :group-by="[{ key: 'FULL_NAME', order: 'asc' }]" items-per-page="-1" hide-default-footer>
+                <template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
+                  <tr>
+                    <td :colspan="columns.length" class="summary-grid-container">
+                      <div class="summary-grid-compact">
+                        <div class="grid-header">
+                          <v-btn size="small" :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'" 
+                                @click="toggleGroup(item)" class="toggle-btn"></v-btn>
+                          <span class="executor-name">{{ item.value }}</span>
+                        </div>
+                        
+                        <div class="grid-stats">
+                          <div class="stat-item">
+                            <span class="stat-number">{{ getSummary(item.value).openCount }}</span>
+                            <span class="stat-label">Открыто</span>
+                          </div>
+                          
+                          <div class="stat-item">
+                            <span class="stat-number">{{ getSummary(item.value).closedCount }}</span>
+                            <span class="stat-label">Закрыто</span>
+                          </div>
+                          
+                          <div class="stat-item">
+                            <span class="stat-number">{{ getSummary(item.value).totalDeals }}</span>
+                            <span class="stat-label">Всего</span>
+                          </div>
+                          
+                          <div class="stat-item">
+                            <span class="stat-number">{{ getSummary(item.value).overdueCount }}</span>
+                            <span class="stat-label">Просрочено</span>
+                          </div>
+                          
+                          <div class="stat-item">
+                            <span class="stat-number">{{ getSummary(item.value).overduePercentage }}%</span>
+                            <span class="stat-label">Просрочено %</span>
+                          </div>
+                          <div class="stat-item">
+                              <span class="stat-number">{{ getSummary(item.value).totalTimeSpent }}</span>
+                              <span class="stat-label">Затрачено времени:</span>
+                          </div>
+                          <div class="stat-item">
+                              <span class="stat-number">{{ getSummary(item.value).overdueTimeSpent }}</span>
+                              <span class="stat-label">Время просрочки:</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </v-data-table>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
+
+  <!-- Диалог отчета 2 (новый пустой) -->
+  <v-dialog v-model="report2Dialog" max-width="800">
+    <v-card>
+      <v-card-title class="primary white--text d-flex justify-space-between align-center">
+        <div class="d-flex align-center">
+          <v-btn icon @click="backToReportsMenu" class="mr-2">
+            <v-icon>mdi-arrow-left</v-icon>
+          </v-btn>
+          Отчет по задачам
+        </div>
+        <v-btn icon small @click="closeAllDialogs" class="ma-1">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </v-card-title>
+      
+      <v-card-text class="pa-6 text-center">
+        <TheForm @updateTaskData="handleTasksData" :users="users" reportType="tasks"></TheForm>
+        <v-data-table :items="tasksTableDate" :headers="tasksTableHeaders" items-per-page="-1" hide-default-footer></v-data-table>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
   </v-app>
 </template>
 
@@ -228,6 +341,7 @@ const newLink = ref('');
 
 const pivotTableDate = ref([]);
 const itemsTableDate = ref([]);
+const tasksTableDate = ref([]);
 const search = ref([]);
 
 const pivotTableHeaders = ref([
@@ -255,6 +369,11 @@ const itemsTableHeaders = ref([
         { title: 'Дедлайн по SLA', value: 'ufCrm_47_1752010416', sortable: true },
 ]);
 
+const tasksTableHeaders = ref([
+        { title: 'id', value: 'id', sortable: true },
+        { title: 'Исполнитель', value: 'FULL_NAME', sortable: true },
+]);
+
 function findUserNameById(userId, usersArray) {
   const user = usersArray.find(user => user.ID == userId);
   return user ? user.FULL_NAME : 'Неизвестный';
@@ -280,7 +399,7 @@ function formatFullName(userData = {}) {
 
 const fields = ref([]);
 const stages = ref([]);
-const handleDataUpdate = async(data) => {
+const handleInvoicesData = async(data) => {
   //pivotTableDate.value = data;
   fields.value = await callApi("crm.item.fields", {}, [], 172);
   fields.value = fields.value.fields;
@@ -301,6 +420,13 @@ const handleDataUpdate = async(data) => {
   replaceIdsWithNames(data, fields.value);
 }
 
+const handleTasksData = (data) => {
+  const tasks = data.reduce((acc, current) => {
+    return acc.concat(current.tasks);
+}, []);
+tasksTableDate.value = tasks;
+}
+
 function formatMillisecondsToDHM(ms, d) {
   const duration = moment.duration(ms);
   
@@ -318,7 +444,10 @@ function replaceIdsWithNames(data, fieldDefinitions) {
    data.map(item => {
     console.log(item);
     const newItem = {};
-    item.duration = item.closedate ? formatMillisecondsToDHM(-moment(item.begindate).diff(moment(item.closedate)), true) : "";
+    if(item.closedate){
+      item.duration = item.closedate ? formatMillisecondsToDHM(-moment(item.begindate).diff(moment(item.closedate)), true) : "";
+    }
+
     // Проходим по всем свойствам объекта
     for (const key in item) {
       const keyMod = key.replace('_', '');
@@ -546,6 +675,17 @@ const subcategoryOptions = ref({
 
 const isValid = computed(() => {
   if(form.value.direction === "1С" && urgency.value && importance.value){
+    
+    if((form.value.requestType === 'Запрос на обслуживание' || form.value.requestType === 'Запрос на изменение') && !!threatsOpportunities.value) {
+      console.log(1);
+      return true;
+    }else if(form.value.requestType !== 'Запрос на обслуживание' && form.value.requestType !== 'Запрос на изменение'){
+      console.log(form.value.requestType);
+      return true;
+    }else{
+      console.log(3);
+      return false;
+    }
     return true;
   }else if(form.value.direction !== null && form.value.direction !== "1С"){
     return true;
@@ -566,7 +706,11 @@ const categories = computed(() => {
 });
 
 const subcategories = computed(() => {
-  return subcategoryOptions.value[form.value.category] || [];
+  if(form.value.category){
+      return subcategoryOptions.value[form.value.category.replace("[ИТ]: ", "")] || [];
+  }else{
+    return [];
+  }
 });
 
 const showContinueButton = ref(false);
@@ -582,8 +726,6 @@ const onDirectionChange = () => {
   form.value.category = null;
   form.value.subcategory = null;
 };
-
-const reportsDialog = ref(false);
 
 const onRequestTypeChange = () => {
   form.value.category = null;
@@ -616,19 +758,19 @@ const removeLink = (index) => {
 
 
 const urgencyOptions = [
-  { title: '1 – не срочно', value: '1 – не срочно' },
-  { title: '2 – срочно', value: '2 – срочно' }
+  { title: '1 - не срочно', value: '1 - не срочно' },
+  { title: '2 - срочно', value: '2 - срочно' }
 ];
 
 const importanceOptions = [
-  { title: '1 – менее важно', value: '1 – менее важно' },
-  { title: '2 – более важно', value: '2 – более важно' }
+  { title: '1 - менее важно', value: '1 - менее важно' },
+  { title: '2 - более важно', value: '2 - более важно' }
 ];
 
 const threatsOptions = [
-  { title: '0 – устранение негативного влияния', value: '0 – устранение негативного влияния' },
-  { title: '1 – улучшение влияет на процесс', value: '1 – улучшение влияет на процесс' },
-  { title: '2 – улучшение влияет на компанию', value: '2 – улучшение влияет на компанию' }
+  { title: '0 - устранение негативного влияния', value: '0 - устранение негативного влияния' },
+  { title: '1 - улучшение влияет на процесс', value: '1 - улучшение влияет на процесс' },
+  { title: '2 - улучшение влияет на компанию', value: '2 - улучшение влияет на компанию' }
 ];
 
 //const b64Files = ref([]);
@@ -663,7 +805,7 @@ const fileToBase64 = async(file) => {
 }
 
 const completeStepper = async() => {
-  try {
+  //try {
     if(isValid.value){
       let itemId = 0;
       isLoading.value = true;
@@ -680,6 +822,7 @@ const completeStepper = async() => {
         )
       });
 
+console.log(fields);
 const oldValues = [
   form.value.direction && `Направление: ${form.value.direction}`,
   form.value.requestType && `Тип заявки: ${form.value.requestType}`,
@@ -695,8 +838,6 @@ const oldValues = [
   .filter(Boolean) // Удаляем все пустые (false) значения
   .join('\n'); // Объединяем оставшиеся значения с переносом строки
 
-console.log(oldValues); // Выводим результат
-
     await new Promise((resolve) => {
       BX24.callMethod(
         'crm.item.add', {
@@ -706,17 +847,20 @@ console.log(oldValues); // Выводим результат
               'title': 'test',
               'comments': '123',
               "categoryId": 69,
-              //"ufCrm47_1706781047803": "", //направление
+              'ufCrm47_1752822542': form.value.category ? form.value.category.indexOf("[Б24]: ") >= 0 ? fields.ufCrm47_1752822542.items.find(item => item.VALUE === form.value.category.replace("[Б24]: ", "")).ID : null : null, //б24
+              'ufCrm47_1752752059810': form.value.subcategory ? fields.ufCrm47_1752752059810.items.find(item => item.VALUE === form.value.subcategory).ID : null,// под ит
+              'ufCrm47_1752822806': form.value.category ? form.value.category.indexOf("[ИТ]: ") >= 0 ? fields.ufCrm47_1752822806.items.find(item => item.VALUE === form.value.category.replace("[ИТ]: ", "")).ID : null : null,// ит
+              'ufCrm47_1752751229696': form.value.category ? form.value.category.indexOf("[1С]: ") >= 0 ? fields.ufCrm47_1752751229696.items.find(item => item.VALUE === form.value.category.replace("[1С]: ", "")).ID : null : null,// 1с
+              "ufCrm47_1706781047803": form.value.direction ? fields.ufCrm47_1706781047803.items.find(item => item.VALUE === form.value.direction).ID : null, //направление
               'ufCrm47_1698839820': b64Files, //Файлы / скрины
-              /*
-              UF_CRM_47_1752218749933, //Важность [1С]
-              UF_CRM_47_1752218774249, //Срочность [1С]
-UF_CRM_47_1752218834398, //Угрозы/Возможности [1С]
-
-UF_CRM_47_1752218606665, //Проект [1C]
-UF_CRM_47_1743432030, //ПРИОРИТЕТ
-UF_CRM_47_1706781277387, //Ссылка для уточнения (А)
-*/
+              'ufCrm47_1706781202419': form.value.description,
+              'ufCrm47_1751371044498': form.value.requestType ? fields.ufCrm47_1751371044498.items.find(item => item.VALUE === form.value.requestType).ID : null,
+              'ufCrm47_1752218749933': importance.value ? fields.ufCrm47_1752218749933.items.find(item => item.VALUE === importance.value).ID : null, //Важность [1С]
+              'ufCrm47_1752218774249': urgency.value ? fields.ufCrm47_1752218774249.items.find(item => item.VALUE === urgency.value).ID : null, //Срочность [1С]
+              'ufCrm47_1752218834398': threatsOpportunities.value ? fields.ufCrm47_1752218834398.items.find(item => item.VALUE === threatsOpportunities.value).ID : null, //Угрозы/Возможности [1С]
+              'ufCrm47_1752218606665': project.value, //Проект [1C]
+              //'ufCrm47_1743432030': threatsOpportunities.value ? fields.ufCrm47_1743432030.items.find(item => item.VALUE === threatsOpportunities.value).ID : null, //ПРИОРИТЕТ
+              'ufCrm47_1706781277387': form.value.links.join(', '), //Ссылка для уточнения (А)*/
             }
         }, (res) => {
             form.value = {
@@ -757,12 +901,12 @@ UF_CRM_47_1706781277387, //Ссылка для уточнения (А)
     });
     successDialog.value = true;
   }
-  } catch (error) {
-    errorDisplay.value = error;
-    errorDialog.value = true;
-  } finally {
+ // } catch (error) {
+ //   errorDisplay.value = error;
+ //   errorDialog.value = true;
+ // } finally {
     isLoading.value = false;
-  }
+ // }
 };
 
 const showVideo = ref(false);
@@ -780,6 +924,11 @@ const users = ref([]);
 
 onMounted(async() => {
   BX24.callMethod(
+    'tasks.task.get',
+    {taskId:475437},
+    function(res){console.log(res.answer.result);}
+);
+  BX24.callMethod(
     "user.get",
     {
         "ID": [10051, 11307, 12031, 9989, 12603, 12181],
@@ -794,6 +943,70 @@ onMounted(async() => {
     }
 );
   isLoading.value = false;
+});
+
+const getSummary = (userName) => pivotTableDate.value.find(u => u.userName === userName) || {
+  openCount: 0,
+  closedCount: 0,
+  totalDeals: 0,
+  totalTimeSpent: '0 дней 0 часов 0 минут',
+  overdueCount: 0,
+  overduePercentage: 0,
+  overdueTimeSpent: '0 дней 0 часов 0 минут'
+};
+
+// Добавляем новые переменные для управления отчетами
+const reportsDialog = ref(false);
+const report1Dialog = ref(false);
+const report2Dialog = ref(false);
+const selectedReport = ref(null);
+
+const reports = ref([
+  {
+    id: 1,
+    title: 'Отчет по заявкам категории ИТ',
+    description: 'Детальная статистика по заявкам ИТ категории',
+    icon: 'mdi-chart-pie'
+  },
+  {
+    id: 2,
+    title: 'Затраченное время по задачам',
+    description: 'Зачтаченное время на задачи по ответственному',
+    icon: 'mdi-clock-outline'
+  }
+]);
+
+const selectReport = (reportId) => {
+  selectedReport.value = reportId;
+};
+
+const openSelectedReport = () => {
+  if (selectedReport.value === 1) {
+    report1Dialog.value = true;
+  } else if (selectedReport.value === 2) {
+    report2Dialog.value = true;
+  }
+  reportsDialog.value = false;
+};
+const backToReportsMenu = () => {
+  report1Dialog.value = false;
+  report2Dialog.value = false;
+  reportsDialog.value = true;
+};
+const openReport = (reportId) => {
+  reportsDialog.value = false;
+  
+  if (reportId === 1) {
+    report1Dialog.value = true;
+  } else if (reportId === 2) {
+    report2Dialog.value = true;
+  }
+};
+// Сбрасываем выбор при закрытии диалога
+watch(reportsDialog, (newVal) => {
+  if (!newVal) {
+    selectedReport.value = null;
+  }
 });
 </script>
 
@@ -875,4 +1088,101 @@ onMounted(async() => {
   .close-report
     margin-left: auto !important
 
+  .summary-grid-container
+    padding: 16px !important
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)
+    border-bottom: 2px solid #dee2e6
+
+  .summary-grid-compact
+    display: grid
+    grid-template-columns: 1fr 2fr 1fr
+    gap: 16px
+    align-items: center
+
+  .grid-header
+    display: flex
+    align-items: center
+    gap: 12px
+
+  .executor-name
+    font-weight: 700
+    color: #2c3e50
+    font-size: 16px
+
+  .grid-stats
+    display: flex
+    gap: 8px
+
+  .stat-item
+    display: flex
+    flex-direction: column
+    align-items: center
+    padding: 8px
+    background: white
+    border-radius: 8px
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+    flex: 1 1 0
+    height: fit-content
+    text-wrap: nowrap
+
+  .stat-number
+    font-weight: 800
+    font-size: 18px
+    color: #3498db
+
+  .stat-label
+    font-size: 11px
+    color: #7f8c8d
+    text-align: center
+
+  tr td:nth-child(5)
+    min-width: 17rem
+
+  td
+    padding-top: 0.5rem !important
+    padding-bottom: 0.5rem !important
+
+  .reports-menu
+    .report-card
+      border: 2px solid #e0e0e0
+      border-radius: 12px
+      transition: all 0.3s ease
+      cursor: pointer
+      
+      &:hover
+        border-color: #2196f3
+        transform: translateY(-2px)
+        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15)
+      
+      &.report-card-active
+        border-color: #2196f3
+        background-color: #f5fbff
+        
+        .report-title
+          color: #2196f3
+
+    .report-title
+      font-size: 1.1rem
+      font-weight: 600
+      margin-bottom: 4px
+      color: #333
+      transition: color 0.3s ease
+
+    .report-description
+      font-size: 0.9rem
+      color: #666
+      margin: 0
+
+  // Адаптивность для мобильных устройств
+  @media (max-width: 600px)
+    .reports-menu
+      .report-card
+        .v-icon
+          font-size: 28px !important
+          
+      .report-title
+        font-size: 1rem
+        
+      .report-description
+        font-size: 0.85rem
 </style>
