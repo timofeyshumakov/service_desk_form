@@ -5,7 +5,7 @@ export async function callApi(method: string, filter: {}, select: string[] | nul
     
     // Определяем параметры в зависимости от метода
     let params: any = {};
-    console.log(!Array.isArray(entityTypeId));
+
     if (method === "task.elapseditem.getlist" && !Array.isArray(entityTypeId)) {
         // Специфичные параметры для task.elapseditem.getlist
         params = {
@@ -48,7 +48,7 @@ if(!Array.isArray(entityTypeId)){
           iterations = entityTypeId.length;
         }
         let resultData: any[] = [];
-        console.log(iterations);
+
         for (let i: number = 0; i < iterations; i++) {
             const key: string = `cmd${i}`;
             
@@ -89,7 +89,6 @@ if(!Array.isArray(entityTypeId)){
                             const batchData = res[key].data();
                             const processedData = batchData.items ? batchData.items : batchData;
                             resultData.push(processedData);
-                            console.log(processedData);
                         }
                         if(!Array.isArray(entityTypeId)){
                             resultData = resultData.flat();

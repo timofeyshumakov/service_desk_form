@@ -10,8 +10,6 @@
         v-if="reportType === 'tasks'"
         v-model="selectedTaskTypes"
         :items="taskTypes"
-        item-title="name"
-        item-value="id"
         label="Тип задачи"
         single-line
         hide-details
@@ -98,11 +96,8 @@ export default {
             loadingUsers: false,
             
             // Типы задач
-            taskTypes: [
-                { id: '1c', name: '1С' },
-                { id: 'b24', name: 'Битрикс24' }
-            ],
-            selectedTaskTypes: ['1c', 'b24'],
+            taskTypes: ['1С', 'Б24' ],
+            selectedTaskTypes: ['1С', 'Б24'],
             selectAllTaskTypes: true
         }
     },
@@ -116,8 +111,6 @@ export default {
     },
     methods: {
         async submit(){
-            console.log(this.selectedDateIso[0]);
-            
             // Устанавливаем фильтры в зависимости от типа отчета
             if (this.reportType === 'invoices') {
                 this.parseStore.resetFilters();
@@ -134,17 +127,7 @@ export default {
                 this.parseStore.setFilter(`<${dateField}`, this.selectedDateIso[1]);
                 this.parseStore.setFilter("RESPONSIBLE_ID", this.selectedUsers);
                 this.parseStore.setFilter("GROUP_ID", 517);
-                
-                // Фильтр по типу задачи
-                if (this.selectedTaskTypes.length > 0) {
-                    if (this.selectedTaskTypes.includes('1c') && this.selectedTaskTypes.includes('b24')) {
-                        // Выбраны оба типа - без фильтрации
-                    } else if (this.selectedTaskTypes.includes('1c')) {
-                        this.parseStore.setFilter("%=TAGS", "1С");
-                    } else if (this.selectedTaskTypes.includes('b24')) {
-                        this.parseStore.setFilter("!%=TAGS", "1С");
-                    }
-                }
+                this.$emit('update:selected-task-types', this.selectedTaskTypes);
             }
         },
         
@@ -278,7 +261,7 @@ export default {
         }
         
         // Инициализируем типы задач
-        this.selectedTaskTypes = ['1c', 'b24'];
+        this.selectedTaskTypes = ['1С', 'Б24'];
         this.selectAllTaskTypes = true;
     }
 }

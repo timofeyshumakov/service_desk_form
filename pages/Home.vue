@@ -225,6 +225,16 @@
           </v-btn>
           Отчет по заявкам категории ИТ
         </div>
+        <div class="d-flex align-center">
+          <v-btn 
+            icon 
+            @click="exportToExcel(pivotTableDate, 'Отчет_по_заявкам_ИТ')"
+            title="Экспорт в Excel"
+            class="mr-2"
+          >
+            <v-icon>mdi-file-excel</v-icon>
+          </v-btn>
+        </div>
         <v-btn icon small @click="report1Dialog = false" class="ma-1">
           <v-icon>mdi-close</v-icon>
         </v-btn>
@@ -300,13 +310,23 @@
           </v-btn>
           Отчет по задачам
         </div>
+        <div class="d-flex align-center">
+          <v-btn 
+            icon 
+            @click="exportTasksToExcel(tasksTableDate, 'Отчет_по_задачам')"
+            title="Экспорт в Excel"
+            class="mr-2"
+          >
+            <v-icon>mdi-file-excel</v-icon>
+          </v-btn>
+        </div>
         <v-btn icon small @click="closeAllDialogs" class="ma-1">
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-card-title>
       
       <v-card-text class="pa-6 text-center">
-        <TheForm @updateTaskData="handleTasksData" :users="taskUsers" reportType="tasks"></TheForm>
+        <TheForm @update-task-data="handleFilteredTasksData" @updateTaskData="handleTasksData" :users="taskUsers" reportType="tasks"></TheForm>
 <div v-if="tasksLoading" class="table-loading">
           <v-progress-circular indeterminate color="primary"></v-progress-circular>
           <span>Загрузка данных...</span>
@@ -351,6 +371,11 @@
               </td>
             </tr>
           </template>
+          <template v-slot:item.title="{ item }">
+                    <a :href="`https://ortonica.bitrix24.ru/company/personal/user/${currentUser}/tasks/task/view/${item.id}/`" target="_blank" class="task-link">
+                      {{ item.title }}
+                    </a>
+          </template>
         </v-data-table>
       </v-card-text>
     </v-card>
@@ -363,6 +388,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import TheForm from '../components/TheForm/TheForm.vue';
 import moment from 'moment';
 import { callApi, getTaskElapsedItems } from '../functions/callApi';
+import * as XLSX from 'xlsx';
 
 const errorDialog = ref(false);
 const successDialog = ref(false);
@@ -964,6 +990,7 @@ watch(showVideo, (newVal) => {
   }
 });
 const users = ref([]);
+const currentUser = ref(0);
 
 onMounted(async() => {
   isLoading.value = true;
@@ -972,6 +999,20 @@ onMounted(async() => {
       loadInvoiceUsers(),
       loadTaskUsers()
     ]);
+await new Promise((resolve) => {
+BX24.callMethod(
+    "user.current",
+    {},
+    function(result)
+    {
+        if(result.error())
+            console.error(result.error());
+        else
+            currentUser.value = result.data().ID;
+          resolve();
+    }
+);
+});
   } catch (error) {
     console.error('Ошибка загрузки пользователей:', error);
   } finally {
@@ -1119,11 +1160,10 @@ const tasksTableHeaders = ref([
   { title: 'Исполнитель', value: 'responsibleFullName', sortable: true },
   { title: 'Время', value: 'timeSpentInLogs', sortable: true },
 ]);
-const handleTasksData = async (data) => {
+const handleTasksData = async (tasks) => {
+  try {
+
   tasksLoading.value = true;
-  const tasks = data.reduce((acc, current) => {
-    return acc.concat(current.tasks);
-  }, []);
   
   // Обрабатываем задачи - добавляем полные имена и преобразуем статусы
   tasksTableDate.value = tasks.map(task => {
@@ -1159,7 +1199,7 @@ const handleTasksData = async (data) => {
     const chunk = tasksTableDate.value.slice(i, i + 50);
     const taskIds = chunk.map(task => task.id);
 
-    try {
+    
       // Получаем затраченное время для текущего блока задач
       const elapsedItems = await getTaskElapsedItems(
         taskIds,
@@ -1189,15 +1229,104 @@ const handleTasksData = async (data) => {
           tasksTableDate.value[taskIndex].timeSpentInLogs = Math.round((totalSeconds / 3600) * 100) / 100;
         }
       });
-
-    } catch (error) {
+  }
+      } catch (error) {
       console.error('Ошибка при получении затраченного времени:', error);
     } finally {
       tasksLoading.value = false;
     }
+};
+
+// Функция для экспорта данных в Excel
+const exportToExcel = (data, fileName) => {
+  try {
+    // Создаем рабочую книгу
+    const wb = XLSX.utils.book_new();
+    
+    // Преобразуем данные в формат для Excel
+    const excelData = data.map(item => ({
+      'Исполнитель': item.userName,
+      'Открыто': item.openCount,
+      'Закрыто': item.closedCount,
+      'Всего': item.totalDeals,
+      'Времени затрачено': item.totalTimeSpent,
+      'Просрочено': item.overdueCount,
+      'Просрочено %': `${item.overduePercentage}%`,
+      'Время просрочки': item.overdueTimeSpent
+    }));
+    
+    // Создаем лист
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    
+    // Добавляем лист в книгу
+    XLSX.utils.book_append_sheet(wb, ws, 'Отчет по заявкам');
+    
+    // Скачиваем файл
+    XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
+    
+  } catch (error) {
+    console.error('Ошибка при экспорте в Excel:', error);
+    errorDisplay.value = 'Ошибка при экспорте в Excel';
+    errorDialog.value = true;
   }
 };
 
+// Функция для экспорта задач в Excel
+const exportTasksToExcel = (data, fileName) => {
+  try {
+    const wb = XLSX.utils.book_new();
+    
+    const excelData = data.map(item => ({
+      'Наименование': item.title,
+      'Статус': item.statusLabel,
+      'Постановщик': item.creatorFullName,
+      'Исполнитель': item.responsibleFullName,
+      'Затрачено времени (часы)': item.timeSpentInLogs,
+      'Дата создания': item.createdDate ? moment(item.createdDate).format('DD.MM.YYYY HH:mm') : '',
+      'Дата завершения': item.closedDate ? moment(item.closedDate).format('DD.MM.YYYY HH:mm') : '',
+      'Приоритет': item.priority || 'Не указан'
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Отчет по задачам');
+    XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
+    
+  } catch (error) {
+    console.error('Ошибка при экспорте задач в Excel:', error);
+    errorDisplay.value = 'Ошибка при экспорте задач в Excel';
+    errorDialog.value = true;
+  }
+};
+
+// Функция для экспорта детализированных данных по заявкам
+const exportDetailedInvoicesToExcel = () => {
+  try {
+    const wb = XLSX.utils.book_new();
+    
+    const excelData = itemsTableDate.value.map(item => ({
+      'ID': item.id,
+      'Исполнитель': item.FULL_NAME,
+      'Статус': item.stageId,
+      'Название': item.title,
+      'Дата начала': item.begindate,
+      'Дата выполнения': item.closedate,
+      'Время затрачено': item.duration,
+      'Подкатегория': item.ufCrm_47_1752752059810,
+      'Категория': item.ufCrm_47_1752822806,
+      'SLA выполнен': item.ufCrm_47_1752010288013,
+      'Дедлайн по SLA': item.ufCrm_47_1752010416
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Детализированные данные');
+    XLSX.writeFile(wb, `Детальный_отчет_по_заявкам_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
+    
+  } catch (error) {
+    console.error('Ошибка при экспорте детализированных данных:', error);
+    errorDisplay.value = 'Ошибка при экспорте детализированных данных';
+    errorDialog.value = true;
+  }
+};
 
 function formatSecondsToReadable(seconds) {
   if (!seconds) return '0 минут';
@@ -1373,6 +1502,9 @@ watch(reportsDialog, (newVal) => {
   td
     padding-top: 0.5rem !important
     padding-bottom: 0.5rem !important
+
+  .task-link
+    color: black
 
   .reports-menu
     .report-card

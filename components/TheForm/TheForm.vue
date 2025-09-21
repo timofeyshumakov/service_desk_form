@@ -13,6 +13,7 @@
             :reportType="reportType"
             @update-data="$emit('update-data', $event)"
             @update-task-data="$emit('update-task-data', $event)"
+            @update:selected-task-types="handleTaskTypesUpdate"
         )
   v-btn(color="primary" @click="submit") {{ submitButtonText }}
 </template>
@@ -62,7 +63,11 @@ const props = defineProps({
     validator: (value) => ['invoices', 'tasks'].includes(value)
   }
 })
-emits: ['update-data', 'update-task-data'];
+const selectedTaskTypes = ref([]);
+
+const handleTaskTypesUpdate = (types) => {
+  selectedTaskTypes.value = types;
+};
 const dateNames = ref(["Любая дата", "Сегодня", "Вчера", "Текущая неделя", "Текущий месяц", "Текущий квартал", "Текущий год", "Прошлая неделя", "Прошлый месяц", "Прошлый квартал", "Прошлый год", "Последние 7 дней", "Последние 30 дней", "Последние 60 дней", "Последние 90 дней", "Последние N дней", "Следующие 7 дней", "Следующие 30 дней", "Следующие 60 дней", "Следующие 90 дней", "Следующие N дней", "Следующая неделя", "Следующий месяц", "Следующий квартал", "Следующий год", "Месяц", "Квартал", "Год", "Точная дата", "Диапазон"])
 const isLoading = ref(props.isLoading)
 const invoices = ref([])
@@ -201,7 +206,14 @@ const submit = async () => {
     */
   } else {
     // Обработка задач
-    emit('updateTaskData', responseData);
+        console.log(responseData);
+  responseData = responseData.reduce((acc, current) => {
+    return acc.concat(current.tasks);
+  }, []);
+      console.log(responseData);
+    const filteredData = filterTasksByType(responseData, selectedTaskTypes.value);
+      console.log(filteredData);
+    emit('updateTaskData', filteredData);
     /*
     [tasks.value, totalTasks] = formatTaskItems(
       responseData.items,
@@ -220,7 +232,17 @@ const submit = async () => {
   isLoading.value = false
   return responseData
 }
-
+const filterTasksByType = (tasksData, selectedTypes) => {
+  if (!selectedTypes || selectedTypes.length === 0) return tasksData;
+  console.log(tasksData[0].description);
+  console.log('Направление: [' + selectedTypes[0].toLowerCase());
+  return tasksData.filter(task => {
+    const description = task.description || '';
+    return selectedTypes.some(type => 
+      description.toLowerCase().includes('направление: [' + type.toLowerCase())
+    );
+  });
+};
 // Следим за изменением типа отчета
 watch(() => props.reportType, (newType) => {
   // Очищаем данные при смене типа отчета
