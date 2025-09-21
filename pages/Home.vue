@@ -231,8 +231,12 @@
       </v-card-title>
       
       <v-card-text>
-<TheForm @update-data="handleInvoicesData" :users="users"></TheForm>
-            <v-data-table :items="itemsTableDate" :headers="itemsTableHeaders" :group-by="[{ key: 'FULL_NAME', order: 'asc' }]" items-per-page="-1" hide-default-footer>
+<TheForm @update-data="handleInvoicesData" :users="invoiceUsers"></TheForm>
+<div v-if="invoicesLoading" class="table-loading">
+          <v-progress-circular indeterminate color="primary"></v-progress-circular>
+          <span>Загрузка данных...</span>
+        </div>
+            <v-data-table v-else :items="itemsTableDate" :headers="itemsTableHeaders" :group-by="[{ key: 'FULL_NAME', order: 'asc' }]" items-per-page="-1" hide-default-footer>
                 <template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
                   <tr>
                     <td :colspan="columns.length" class="summary-grid-container">
@@ -302,8 +306,52 @@
       </v-card-title>
       
       <v-card-text class="pa-6 text-center">
-        <TheForm @updateTaskData="handleTasksData" :users="users" reportType="tasks"></TheForm>
-        <v-data-table :items="tasksTableDate" :headers="tasksTableHeaders" items-per-page="-1" hide-default-footer></v-data-table>
+        <TheForm @updateTaskData="handleTasksData" :users="taskUsers" reportType="tasks"></TheForm>
+<div v-if="tasksLoading" class="table-loading">
+          <v-progress-circular indeterminate color="primary"></v-progress-circular>
+          <span>Загрузка данных...</span>
+        </div>
+        <v-data-table v-else :items="tasksTableDate" :headers="tasksTableHeaders" :group-by="[{ key: 'responsibleFullName', order: 'asc' }]" items-per-page="-1" hide-default-footer>
+<template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
+            <tr>
+              <td :colspan="columns.length" class="summary-grid-container">
+                <div class="summary-grid-compact">
+                  <div class="grid-header">
+                    <v-btn size="small" :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'" 
+                          @click="toggleGroup(item)" class="toggle-btn"></v-btn>
+                    <span class="executor-name">{{ item.value }}</span>
+                  </div>
+                  
+                  <div class="grid-stats">
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getTaskSummary(item.value).totalTasks }}</span>
+                      <span class="stat-label">Всего задач</span>
+                    </div>
+                    
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getTaskSummary(item.value).completedTasks }}</span>
+                      <span class="stat-label">Завершено</span>
+                    </div>
+                    
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getTaskSummary(item.value).inProgressTasks }}</span>
+                      <span class="stat-label">В работе</span>
+                    </div>
+                    
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getTaskSummary(item.value).newTasks }}</span>
+                      <span class="stat-label">Новые</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getTaskSummary(item.value).totalTimeSpent }}</span>
+                      <span class="stat-label">Затрачено времени</span>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </v-data-table>
       </v-card-text>
     </v-card>
   </v-dialog>
@@ -314,7 +362,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import TheForm from '../components/TheForm/TheForm.vue';
 import moment from 'moment';
-import { callApi } from '../functions/callApi';
+import { callApi, getTaskElapsedItems } from '../functions/callApi';
 
 const errorDialog = ref(false);
 const successDialog = ref(false);
@@ -369,10 +417,9 @@ const itemsTableHeaders = ref([
         { title: 'Дедлайн по SLA', value: 'ufCrm_47_1752010416', sortable: true },
 ]);
 
-const tasksTableHeaders = ref([
-        { title: 'id', value: 'id', sortable: true },
-        { title: 'Исполнитель', value: 'FULL_NAME', sortable: true },
-]);
+// Добавляем состояния загрузки для таблиц
+const invoicesLoading = ref(false);
+const tasksLoading = ref(false);
 
 function findUserNameById(userId, usersArray) {
   const user = usersArray.find(user => user.ID == userId);
@@ -399,8 +446,11 @@ function formatFullName(userData = {}) {
 
 const fields = ref([]);
 const stages = ref([]);
+
 const handleInvoicesData = async(data) => {
+  invoicesLoading.value = true;
   //pivotTableDate.value = data;
+  try {
   fields.value = await callApi("crm.item.fields", {}, [], 172);
   fields.value = fields.value.fields;
   stages.value = await new Promise((resolve) => {
@@ -418,13 +468,11 @@ const handleInvoicesData = async(data) => {
   calculateOverdueDeals(data);
   itemsTableDate.value = data;
   replaceIdsWithNames(data, fields.value);
-}
-
-const handleTasksData = (data) => {
-  const tasks = data.reduce((acc, current) => {
-    return acc.concat(current.tasks);
-}, []);
-tasksTableDate.value = tasks;
+    } catch (error) {
+      console.error(error);
+    } finally {
+      invoicesLoading.value = false;
+    }
 }
 
 function formatMillisecondsToDHM(ms, d) {
@@ -442,7 +490,6 @@ function formatMillisecondsToDHM(ms, d) {
 
 function replaceIdsWithNames(data, fieldDefinitions) {
    data.map(item => {
-    console.log(item);
     const newItem = {};
     if(item.closedate){
       item.duration = item.closedate ? formatMillisecondsToDHM(-moment(item.begindate).diff(moment(item.closedate)), true) : "";
@@ -677,13 +724,10 @@ const isValid = computed(() => {
   if(form.value.direction === "1С" && urgency.value && importance.value){
     
     if((form.value.requestType === 'Запрос на обслуживание' || form.value.requestType === 'Запрос на изменение') && !!threatsOpportunities.value) {
-      console.log(1);
       return true;
     }else if(form.value.requestType !== 'Запрос на обслуживание' && form.value.requestType !== 'Запрос на изменение'){
-      console.log(form.value.requestType);
       return true;
     }else{
-      console.log(3);
       return false;
     }
     return true;
@@ -822,7 +866,6 @@ const completeStepper = async() => {
         )
       });
 
-console.log(fields);
 const oldValues = [
   form.value.direction && `Направление: ${form.value.direction}`,
   form.value.requestType && `Тип заявки: ${form.value.requestType}`,
@@ -923,27 +966,73 @@ watch(showVideo, (newVal) => {
 const users = ref([]);
 
 onMounted(async() => {
-  BX24.callMethod(
-    'tasks.task.get',
-    {taskId:475437},
-    function(res){console.log(res.answer.result);}
-);
-  BX24.callMethod(
-    "user.get",
-    {
-        "ID": [10051, 11307, 12031, 9989, 12603, 12181],
-    },
-    function(result)
-    {
-        if(result.error())
-            console.error(result.error());
-        else
-          users.value = result.data();
-          users.value.forEach(user => user.FULL_NAME = formatFullName(user));
-    }
-);
-  isLoading.value = false;
+  isLoading.value = true;
+  try {
+    await Promise.all([
+      loadInvoiceUsers(),
+      loadTaskUsers()
+    ]);
+  } catch (error) {
+    console.error('Ошибка загрузки пользователей:', error);
+  } finally {
+    isLoading.value = false;
+  }
 });
+const invoiceUsers = ref([]); // Пользователи для отчета по заявкам
+const taskUsers = ref([]);    // Пользователи для отчета по задачам
+const loadTaskUsers = async () => {
+  try {
+    const usersData = await callApi(
+      "user.get",
+      { "ID": [13063, 489, 9735, 9731, 320] },
+      [],
+      0,
+      0,
+      0
+    );
+    
+    taskUsers.value = usersData.map(user => ({
+      ID: user.ID,
+      FULL_NAME: `${user.LAST_NAME || ''} ${user.NAME || ''} ${user.SECOND_NAME || ''}`.trim(),
+      NAME: user.NAME,
+      LAST_NAME: user.LAST_NAME,
+      SECOND_NAME: user.SECOND_NAME,
+      EMAIL: user.EMAIL,
+      WORK_POSITION: user.WORK_POSITION
+    }));
+  } catch (error) {
+    console.error('Ошибка загрузки пользователей для задач:', error);
+    taskUsers.value = [];
+  }
+};
+// Функция для загрузки пользователей для отчета по заявкам
+const loadInvoiceUsers = async () => {
+  try {
+    const usersData = await new Promise((resolve, reject) => {
+      BX24.callMethod(
+        "user.get",
+        {
+          "ID": [10051, 11307, 12031, 9989, 12603, 12181],
+        },
+        function(result) {
+          if (result.error()) {
+            reject(result.error());
+          } else {
+            resolve(result.data());
+          }
+        }
+      );
+    });
+    
+    invoiceUsers.value = usersData.map(user => ({
+      ...user,
+      FULL_NAME: formatFullName(user)
+    }));
+  } catch (error) {
+    console.error('Ошибка загрузки пользователей для заявок:', error);
+    invoiceUsers.value = [];
+  }
+};
 
 const getSummary = (userName) => pivotTableDate.value.find(u => u.userName === userName) || {
   openCount: 0,
@@ -1002,6 +1091,149 @@ const openReport = (reportId) => {
     report2Dialog.value = true;
   }
 };
+const TASK_STATUS = {
+  STATE_NEW: 1,
+  STATE_PENDING: 2,
+  STATE_IN_PROGRESS: 3,
+  STATE_SUPPOSEDLY_COMPLETED: 4,
+  STATE_COMPLETED: 5,
+  STATE_DEFERRED: 6,
+  STATE_DECLINED: 7
+};
+
+const TASK_STATUS_LABELS = {
+  [TASK_STATUS.STATE_NEW]: 'Новая',
+  [TASK_STATUS.STATE_PENDING]: 'Ждет выполнения',
+  [TASK_STATUS.STATE_IN_PROGRESS]: 'Выполняется',
+  [TASK_STATUS.STATE_SUPPOSEDLY_COMPLETED]: 'Предположительно завершена',
+  [TASK_STATUS.STATE_COMPLETED]: 'Завершена',
+  [TASK_STATUS.STATE_DEFERRED]: 'Отложена',
+  [TASK_STATUS.STATE_DECLINED]: 'Отклонена'
+};
+
+// Заголовки таблицы задач
+const tasksTableHeaders = ref([
+  { title: 'Наименование', value: 'title', sortable: true },
+  { title: 'Статус', value: 'statusLabel', sortable: true },
+  { title: 'Постановщик', value: 'creatorFullName', sortable: true },
+  { title: 'Исполнитель', value: 'responsibleFullName', sortable: true },
+  { title: 'Время', value: 'timeSpentInLogs', sortable: true },
+]);
+const handleTasksData = async (data) => {
+  tasksLoading.value = true;
+  const tasks = data.reduce((acc, current) => {
+    return acc.concat(current.tasks);
+  }, []);
+  
+  // Обрабатываем задачи - добавляем полные имена и преобразуем статусы
+  tasksTableDate.value = tasks.map(task => {
+    // Формируем полное имя постановщика
+    const creatorFullName = formatTaskUserName(
+      task.createdByLastName,
+      task.createdByName,
+      task.createdBySecondName
+    );
+    
+    // Формируем полное имя исполнителя
+    const responsibleFullName = formatTaskUserName(
+      task.responsibleLastName,
+      task.responsibleName,
+      task.responsibleSecondName
+    );
+    
+    // Преобразуем статус в читаемый формат
+    const statusLabel = TASK_STATUS_LABELS[task.status] || 'Неизвестный статус';
+
+    return {
+      ...task,
+      creatorFullName,
+      responsibleFullName,
+      statusLabel,
+      timeSpentInLogs: 0, // Инициализируем поле для затраченного времени
+      timeSpentFormatted: '0 минут' // Форматированное время
+    };
+  });
+
+  // Обрабатываем задачи батчами по 50
+  for (let i = 0; i < tasksTableDate.value.length; i += 50) {
+    const chunk = tasksTableDate.value.slice(i, i + 50);
+    const taskIds = chunk.map(task => task.id);
+
+    try {
+      // Получаем затраченное время для текущего блока задач
+      const elapsedItems = await getTaskElapsedItems(
+        taskIds,
+        {'ID': 'desc'}, 
+        [], 
+        ['ID', 'SECONDS', 'USER_ID']
+      );
+
+      // Обрабатываем каждый элемент чанка
+      chunk.forEach((task, index) => {
+        // Получаем записи времени для текущей задачи
+        const timeRecords = elapsedItems[index];
+        
+        if (timeRecords && Array.isArray(timeRecords)) {
+          // Фильтруем записи: оставляем только те, где USER_ID = responsibleId
+          const responsibleTimeRecords = timeRecords.filter(record => 
+            record.USER_ID === task.responsibleId
+          );
+          
+          // Суммируем время в секундах
+          const totalSeconds = responsibleTimeRecords.reduce((sum, record) => 
+            sum + (+record.SECONDS || 0), 0
+          );
+          
+          // Обновляем задачу в основном массиве
+          const taskIndex = i + index;
+          tasksTableDate.value[taskIndex].timeSpentInLogs = Math.round((totalSeconds / 3600) * 100) / 100;
+        }
+      });
+
+    } catch (error) {
+      console.error('Ошибка при получении затраченного времени:', error);
+    } finally {
+      tasksLoading.value = false;
+    }
+  }
+};
+
+
+function formatSecondsToReadable(seconds) {
+  if (!seconds) return '0 минут';
+  
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  
+  if (hours > 0) {
+    return `${hours} ч ${minutes} мин`;
+  } else {
+    return `${minutes} мин`;
+  }
+}
+// Функция для форматирования имени пользователя задачи
+function formatTaskUserName(lastName, name, secondName) {
+  const nameParts = [];
+  if (lastName) nameParts.push(lastName);
+  if (name) nameParts.push(name);
+  if (secondName) nameParts.push(secondName);
+  
+  return nameParts.length > 0 ? nameParts.join(' ') : 'Неизвестный пользователь';
+}
+
+// Функция для получения сводки по задачам исполнителя
+const getTaskSummary = (responsibleName) => {
+  const userTasks = tasksTableDate.value.filter(task => task.responsibleFullName === responsibleName);
+  const totalTimeSpent = userTasks.reduce((sum, task) => sum + (task.timeSpentInLogs || 0), 0);
+  return {
+    totalTasks: userTasks.length,
+    totalTimeSpent: totalTimeSpent,
+    completedTasks: userTasks.filter(task => task.statusLabel === "Завершена").length,
+    inProgressTasks: userTasks.filter(task => task.statusLabel === "Выполняется").length,
+    newTasks: userTasks.filter(task => task.statusLabel  === "Ждет выполнения" || "Новая").length
+  };
+};
+
 // Сбрасываем выбор при закрытии диалога
 watch(reportsDialog, (newVal) => {
   if (!newVal) {

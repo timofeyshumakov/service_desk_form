@@ -33,7 +33,7 @@
     //- Поле выбора сотрудников
     v-autocomplete(
         v-model="selectedUsers"
-        :items="users"
+        :items="filterUsers"
         item-title="FULL_NAME"
         item-value="ID"
         single-line
@@ -42,6 +42,7 @@
         chips
         clearable
         :loading="loadingUsers"
+        :label="userLabel"
     )
         template(v-slot:prepend-item)
             v-list-item
@@ -89,7 +90,7 @@ export default {
             parseStore,
             myStore,
             invoices: myStore,
-            
+            filterUsers: this.users,
             // Данные для задач
             selectedAllUsers: true,
             userIds: [],
@@ -227,6 +228,16 @@ export default {
         
     },
     watch: {
+        users(newUsers) {
+            // Обновляем локальную копию при изменении пропса users
+            this.filterUsers = newUsers;
+            this.userIds = newUsers.map(u => u.ID);
+            
+            // Автоматически выбираем всех пользователей при загрузке
+            if (this.selectedAllUsers) {
+                this.selectedUsers = [...this.userIds];
+            }
+        },
         selectedBranches(value){
             console.log(value);
             this.$emit('update:selectedBranches', value);
@@ -235,16 +246,16 @@ export default {
             this.$emit('update:selectedPaymentMethods', value);
         },
         reportType(newType) {
-            // При смене типа отчета сбрасываем фильтры
-            this.parseStore.clearFilters();
-            
+            // При смене типа отчета используем соответствующих пользователей
             if (newType === 'tasks') {
-                // Для задач загружаем пользователей из API
-                this.loadTaskUsers();
-                this.selectedTaskTypes = ['1c', 'b24'];
-                this.selectAllTaskTypes = true;
+                // Для задач используем переданных пользователей
+                this.filterUsers = this.users;
+                this.userIds = this.users.map(u => u.ID);
+                this.selectedUsers = [...this.userIds];
+                this.selectedAllUsers = true;
             } else {
                 // Для заявок используем переданных пользователей
+                this.filterUsers = this.users;
                 this.userIds = this.users.map(u => u.ID);
                 this.selectedUsers = [...this.userIds];
                 this.selectedAllUsers = true;

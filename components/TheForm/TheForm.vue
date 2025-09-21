@@ -11,6 +11,8 @@
             :users="users"
             ref="child"
             :reportType="reportType"
+            @update-data="$emit('update-data', $event)"
+            @update-task-data="$emit('update-task-data', $event)"
         )
   v-btn(color="primary" @click="submit") {{ submitButtonText }}
 </template>
@@ -60,7 +62,7 @@ const props = defineProps({
     validator: (value) => ['invoices', 'tasks'].includes(value)
   }
 })
-
+emits: ['update-data', 'update-task-data'];
 const dateNames = ref(["Любая дата", "Сегодня", "Вчера", "Текущая неделя", "Текущий месяц", "Текущий квартал", "Текущий год", "Прошлая неделя", "Прошлый месяц", "Прошлый квартал", "Прошлый год", "Последние 7 дней", "Последние 30 дней", "Последние 60 дней", "Последние 90 дней", "Последние N дней", "Следующие 7 дней", "Следующие 30 дней", "Следующие 60 дней", "Следующие 90 дней", "Следующие N дней", "Следующая неделя", "Следующий месяц", "Следующий квартал", "Следующий год", "Месяц", "Квартал", "Год", "Точная дата", "Диапазон"])
 const isLoading = ref(props.isLoading)
 const invoices = ref([])
