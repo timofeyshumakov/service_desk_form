@@ -171,8 +171,6 @@ const submit = async () => {
   myStore.clearItems()
   parseStore.deleteParsedBatches()
 
-  console.log(parseStore.filter);
-  
   // Вызываем API с соответствующими параметрами
   responseData = await callApi(
     entitySettings.entity,
@@ -207,13 +205,14 @@ const submit = async () => {
     */
   } else {
     // Обработка задач
-        console.log(responseData);
+        if(Array.isArray(responseData)){
   responseData = responseData.reduce((acc, current) => {
     return acc.concat(current.tasks);
   }, []);
-      console.log(responseData);
+        }else{
+          responseData = responseData.tasks;
+        }
     const filteredData = filterTasksByType(responseData, selectedTaskTypes.value);
-      console.log(filteredData);
     emit('updateTaskData', filteredData);
     /*
     [tasks.value, totalTasks] = formatTaskItems(
@@ -235,8 +234,6 @@ const submit = async () => {
 }
 const filterTasksByType = (tasksData, selectedTypes) => {
   if (!selectedTypes || selectedTypes.length === 0) return tasksData;
-  console.log(tasksData[0].description);
-  console.log('Направление: [' + selectedTypes[0].toLowerCase());
   return tasksData.filter(task => {
     const description = task.description || '';
     return selectedTypes.some(type => 

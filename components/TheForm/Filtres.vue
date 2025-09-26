@@ -170,14 +170,12 @@ export default {
         },
         
         toggleSelectAllUsers() {
-            console.log(this.selectedAllUsers);
             if(this.selectedAllUsers){
                 this.selectedAllUsers = false;
                 this.selectedUsers = [];
             }else{
                 this.selectedUsers = this.userIds;
                 this.selectedAllUsers = true;
-                console.log(this.selectedAllUsers);
             }
         },
         
@@ -186,7 +184,7 @@ export default {
                 this.selectAllTaskTypes = false;
                 this.selectedTaskTypes = [];
             }else{
-                this.selectedTaskTypes = this.taskTypes.map(type => type.id);
+                this.selectedTaskTypes = this.taskTypes;
                 this.selectAllTaskTypes = true;
             }
         },
@@ -222,7 +220,6 @@ export default {
             }
         },
         selectedBranches(value){
-            console.log(value);
             this.$emit('update:selectedBranches', value);
         },
         selectedPaymentMethods(value){

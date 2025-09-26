@@ -226,18 +226,20 @@
           Отчет по заявкам категории ИТ
         </div>
         <div class="d-flex align-center">
-          <v-btn 
-            icon 
-            @click="exportDetailedInvoicesToExcel(pivotTableDate, 'Отчет_по_заявкам_ИТ')"
-            title="Экспорт в Excel"
-            class="mr-2"
-          >
-            <v-icon>mdi-file-excel</v-icon>
+          <div class="d-flex align-center">
+            <v-btn 
+              icon 
+              @click="exportDetailedInvoicesToExcel(pivotTableDate, 'Отчет_по_заявкам_ИТ')"
+              title="Экспорт в Excel"
+              class="mr-2"
+            >
+              <v-icon>mdi-file-excel</v-icon>
+            </v-btn>
+          </div>
+          <v-btn icon small @click="report1Dialog = false" class="ma-1">
+            <v-icon>mdi-close</v-icon>
           </v-btn>
         </div>
-        <v-btn icon small @click="report1Dialog = false" class="ma-1">
-          <v-icon>mdi-close</v-icon>
-        </v-btn>
       </v-card-title>
       
       <v-card-text>
@@ -265,51 +267,52 @@
                                 @click="toggleGroup(item)" class="toggle-btn"></v-btn>
                           <span class="executor-name">{{ item.value }}</span>
                         </div>
-                        
                         <div class="grid-stats">
                           <div class="stat-item">
+                              <span class="stat-number">{{ getSummary(item.value).totalDeals }}</span>
+                              <span class="stat-label">Кол-во тикетов</span>
+                          </div>
+                          <div class="stat-item">
                             <span class="stat-number">{{ getSummary(item.value).openCount }}</span>
-                            <span class="stat-label">Открыто</span>
-                          </div>
-                          
-                          <div class="stat-item">
-                            <span class="stat-number">{{ getSummary(item.value).closedCount }}</span>
-                            <span class="stat-label">Закрыто</span>
-                          </div>
-                          
-                          <div class="stat-item">
-                            <span class="stat-number">{{ getSummary(item.value).totalDeals }}</span>
-                            <span class="stat-label">Всего</span>
-                          </div>
-                          
-                          <div class="stat-item">
-                            <span class="stat-number">{{ getSummary(item.value).overdueCount }}</span>
-                            <span class="stat-label">Просрочено</span>
+                            <span class="stat-label">Открытых</span>
                           </div>
 
                           <div class="stat-item">
                               <span class="stat-number">{{ getSummary(item.value).totalTimeSpent }}</span>
-                              <span class="stat-label">Затрачено времени:</span>
+                              <span class="stat-label">Время затрачено:</span>
                           </div>
 
                           <div class="stat-item">
                             <span class="stat-number">{{ getSummary(item.value).slaCompletedCount }}</span>
-                            <span class="stat-label">SLA выполнено</span>
+                            <span class="stat-label">SLA выполнен</span>
                           </div>
                           
                           <div class="stat-item">
                             <span class="stat-number">{{ getSummary(item.value).slaNotCompletedCount }}</span>
-                            <span class="stat-label">SLA не выполнено</span>
+                            <span class="stat-label">SLA не выполнен</span>
                           </div>
 
                           <div class="stat-item">
                             <span class="stat-number">{{ getSummary(item.value).slaNotCompletedPercentage }}%</span>
-                            <span class="stat-label">SLA не выполнено %</span>
+                            <span class="stat-label">% невыполненных </span>
                           </div>
                         </div>
                       </div>
                     </td>
                   </tr>
+                </template>
+                <template v-slot:item.title="{ item }">
+                    <a 
+                        v-if="item.ufCrm_47_1701780020523" 
+                        :href="`https://ortonica.bitrix24.ru/company/personal/user/${currentUser}/tasks/task/view/${item.ufCrm_47_1701780020523}/`" 
+                        target="_blank" 
+                        class="task-link"
+                    >
+                        {{ item.title }}
+                    </a>
+                    <span v-else>
+                        {{ item.title }}
+                    </span>
                 </template>
               </v-data-table>
       </v-card-text>
@@ -525,25 +528,9 @@ const handleInvoicesData = async(data) => {
     }
 }
 
-function formatMillisecondsToDHM(ms, d) {
-  const duration = moment.duration(ms);
-  
-  const days = Math.floor(duration.asDays());
-  const hours = duration.hours();
-  const minutes = duration.minutes();
-  if(d){
-    return `${days} дней`;
-  }else{
-    return `${days} дней ${hours} часов ${minutes} минут`;
-  }
-}
-
 function replaceIdsWithNames(data, fieldDefinitions) {
    data.map(item => {
     const newItem = {};
-    if(item.closedate){
-      item.duration = item.closedate ? formatMillisecondsToDHM(-moment(item.begindate).diff(moment(item.closedate)), true) : "";
-    }
 
     // Проходим по всем свойствам объекта
     for (const key in item) {
@@ -582,7 +569,6 @@ const getInvoiceTasksTime = async (invoicesData) => {
       .filter(taskId => !isNaN(taskId));
 
     if (taskIds.length === 0) {
-      console.log('Нет связанных задач для расчета времени');
       return {};
     }
 
@@ -600,13 +586,12 @@ const getInvoiceTasksTime = async (invoicesData) => {
         chunk,
         {'ID': 'desc'}, 
         [], 
-        ['ID', 'SECONDS', 'USER_ID', 'TASK_ID']
+        ['ID', 'SECONDS', 'USER_ID']
       );
  
       // Обрабатываем полученные данные
       chunk.forEach((taskId, index) => {
         const timeRecords = elapsedItems[index];
-         
         if (timeRecords && Array.isArray(timeRecords)) {
           // Находим заявку, связанную с этой задачей
           const relatedInvoice = invoicesData.find(invoice => 
@@ -632,7 +617,7 @@ const getInvoiceTasksTime = async (invoicesData) => {
         }
       });
     }
-            console.log(taskTimeMap);
+
     return taskTimeMap;
   } catch (error) {
     console.error('Ошибка при получении времени задач заявок:', error);
@@ -644,11 +629,12 @@ const calculateOverdueDeals = async (data) => {
   
   // Получаем время затраченное на связанные задачи
   const taskTimeMap = await getInvoiceTasksTime(data);
-  
-  data.forEach(deal => {
+  data.forEach((deal, i) => {
     const userId = deal.ufCrm_47_1700468491; // Исполнитель
     if (!userId) return;
-    
+    //deal.duration = taskTimeMap[deal.ufCrm_47_1701780020523];
+
+    itemsTableDate.value[i].duration = taskTimeMap[deal.ufCrm_47_1701780020523] || 0;
     if (!userMap[userId]) {
       userMap[userId] = {
         userId,
@@ -669,14 +655,14 @@ const calculateOverdueDeals = async (data) => {
     userMap[userId].totalDeals++;
     
     const slaStatus = deal.ufCrm_47_1752010288013;
-    if (slaStatus === 12257) {
+    if (slaStatus === 'Да') {
       userMap[userId].slaCompletedCount++;
     } else {
       userMap[userId].slaNotCompletedCount++;
     }
     
     // Проверяем статус сделки
-    if (deal.stageId === "DT172_69:SUCCESS") {
+    if (deal.stageId === "ЗАВЕРШЕНО") {
       userMap[userId].closedCount++;
     } else {
       userMap[userId].openCount++;
@@ -710,7 +696,7 @@ const calculateOverdueDeals = async (data) => {
       : 0;
 
     // Форматируем время в читаемый формат
-    const totalTimeSpentFormatted = user.totalTimeSpent;
+    const totalTimeSpentFormatted = user.totalTimeSpent.toFixed(2);
     const overdueTimeSpentFormatted = user.overdueTimeSpent;
 
     return {
@@ -722,7 +708,7 @@ const calculateOverdueDeals = async (data) => {
       slaNotCompletedPercentage,
     };
   });
-  
+
   pivotTableDate.value = result;
 };
 // Options data
@@ -1479,7 +1465,7 @@ const getTaskSummary = (responsibleName) => {
     totalTimeSpent: totalTimeSpent,
     completedTasks: userTasks.filter(task => task.statusLabel === "Завершена").length,
     inProgressTasks: userTasks.filter(task => task.statusLabel === "Выполняется").length,
-    newTasks: userTasks.filter(task => task.statusLabel  === "Ждет выполнения" || "Новая").length
+    newTasks: userTasks.filter(task => task.statusLabel  === "Ждет выполнения").length + userTasks.filter(task => task.statusLabel  === "Новая").length,
   };
 };
 const invoicesTable = ref(null);
