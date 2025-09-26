@@ -228,7 +228,7 @@
         <div class="d-flex align-center">
           <v-btn 
             icon 
-            @click="exportToExcel(pivotTableDate, 'Отчет_по_заявкам_ИТ')"
+            @click="exportDetailedInvoicesToExcel(pivotTableDate, 'Отчет_по_заявкам_ИТ')"
             title="Экспорт в Excel"
             class="mr-2"
           >
@@ -246,7 +246,16 @@
           <v-progress-circular indeterminate color="primary"></v-progress-circular>
           <span>Загрузка данных...</span>
         </div>
-            <v-data-table v-else :items="itemsTableDate" :headers="itemsTableHeaders" :group-by="[{ key: 'FULL_NAME', order: 'asc' }]" items-per-page="-1" hide-default-footer>
+            <v-data-table v-else 
+          :items="itemsTableDate" 
+          :headers="itemsTableHeaders" 
+          :group-by="[{ key: 'FULL_NAME', order: 'asc' }]" 
+          items-per-page="-1" 
+          hide-default-footer
+          ref="invoicesTable"
+          @keydown="handleTableKeydown"
+          tabindex="0"
+          >
                 <template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
                   <tr>
                     <td :colspan="columns.length" class="summary-grid-container">
@@ -277,18 +286,25 @@
                             <span class="stat-number">{{ getSummary(item.value).overdueCount }}</span>
                             <span class="stat-label">Просрочено</span>
                           </div>
-                          
-                          <div class="stat-item">
-                            <span class="stat-number">{{ getSummary(item.value).overduePercentage }}%</span>
-                            <span class="stat-label">Просрочено %</span>
-                          </div>
+
                           <div class="stat-item">
                               <span class="stat-number">{{ getSummary(item.value).totalTimeSpent }}</span>
                               <span class="stat-label">Затрачено времени:</span>
                           </div>
+
                           <div class="stat-item">
-                              <span class="stat-number">{{ getSummary(item.value).overdueTimeSpent }}</span>
-                              <span class="stat-label">Время просрочки:</span>
+                            <span class="stat-number">{{ getSummary(item.value).slaCompletedCount }}</span>
+                            <span class="stat-label">SLA выполнено</span>
+                          </div>
+                          
+                          <div class="stat-item">
+                            <span class="stat-number">{{ getSummary(item.value).slaNotCompletedCount }}</span>
+                            <span class="stat-label">SLA не выполнено</span>
+                          </div>
+
+                          <div class="stat-item">
+                            <span class="stat-number">{{ getSummary(item.value).slaNotCompletedPercentage }}%</span>
+                            <span class="stat-label">SLA не выполнено %</span>
                           </div>
                         </div>
                       </div>
@@ -331,7 +347,16 @@
           <v-progress-circular indeterminate color="primary"></v-progress-circular>
           <span>Загрузка данных...</span>
         </div>
-        <v-data-table v-else :items="tasksTableDate" :headers="tasksTableHeaders" :group-by="[{ key: 'responsibleFullName', order: 'asc' }]" items-per-page="-1" hide-default-footer>
+        <v-data-table v-else
+          :items="tasksTableDate" 
+          :headers="tasksTableHeaders" 
+          :group-by="[{ key: 'responsibleFullName', order: 'asc' }]" 
+          items-per-page="-1" 
+          hide-default-footer
+          ref="tasksTable"
+          @keydown="handleTableKeydown"
+          tabindex="0"
+          >
 <template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
             <tr>
               <td :colspan="columns.length" class="summary-grid-container">
@@ -384,7 +409,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import TheForm from '../components/TheForm/TheForm.vue';
 import moment from 'moment';
 import { callApi, getTaskElapsedItems } from '../functions/callApi';
@@ -419,19 +444,18 @@ const tasksTableDate = ref([]);
 const search = ref([]);
 
 const pivotTableHeaders = ref([
-        { title: 'Исполнитель', value: 'userName', sortable: true },
-        { title: 'Открыто', value: 'openCount', sortable: true },
-        { title: 'Закрто', value: 'closedCount', sortable: true },
-        { title: 'Всего', value: 'totalDeals', sortable: true },
-        { title: 'Времени затрачено', value: 'totalTimeSpent', sortable: true },
-        { title: 'Просрочено', value: 'overdueCount', sortable: true },
-        { title: 'Просрочено %', value: 'overduePercentage', sortable: true },
-        { title: 'Время просрочки', value: 'overdueTimeSpent', sortable: true },
+        { title: 'Сотрудник', value: 'userName', sortable: true },
+        { title: 'Кол-во тикетов', value: 'totalDeals', sortable: true },
+        { title: 'Открытых', value: 'openCount', sortable: true },
+        { title: 'Закртых', value: 'closedCount', sortable: true },
+        { title: 'Время затрачено', value: 'totalTimeSpent', sortable: true },
+        { title: 'SLA выполнено', value: 'slaCompletedCount', sortable: true },
+        { title: 'SLA не выполнено', value: 'slaNotCompletedCount', sortable: true },
 ]);
 
 const itemsTableHeaders = ref([
         { title: 'id', value: 'id', sortable: true },
-        { title: 'Исполнитель', value: 'FULL_NAME', sortable: true },
+        { title: 'Сотрудник', value: 'FULL_NAME', sortable: true },
         { title: 'Статус', value: 'stageId', sortable: true },
         { title: 'Название', value: 'title', sortable: true },
         { title: 'Дата начала', value: 'begindate', sortable: true },
@@ -535,7 +559,7 @@ function replaceIdsWithNames(data, fieldDefinitions) {
       } else if(key === "stageId"){
         item.stageId = stages.value.find(stage => stage.STATUS_ID === item.stageId).NAME;
       } else if(key === "ufCrm_47_1700468491"){
-        item.FULL_NAME = users.value.find(user => user.ID == item.ufCrm_47_1700468491).FULL_NAME;
+        item.FULL_NAME = invoiceUsers.value.find(user => user.ID == item.ufCrm_47_1700468491).FULL_NAME;
       } else{
         // Оставляем другие поля как есть
         newItem[key] = item[key];
@@ -547,9 +571,79 @@ function replaceIdsWithNames(data, fieldDefinitions) {
   });
 
 }
+const getInvoiceTasksTime = async (invoicesData) => {
 
-const calculateOverdueDeals = (data) => {
+  try {
+    // Собираем все ID задач из заявок
+    const taskIds = invoicesData
+      .map(invoice => invoice.ufCrm_47_1701780020523)
+      .filter(taskId => taskId && taskId !== '' && taskId !== '0')
+      .map(taskId => parseInt(taskId))
+      .filter(taskId => !isNaN(taskId));
+
+    if (taskIds.length === 0) {
+      console.log('Нет связанных задач для расчета времени');
+      return {};
+    }
+
+    // Убираем дубликаты
+    const uniqueTaskIds = [...new Set(taskIds)];
+
+    // Получаем данные о затраченном времени для задач
+    const taskTimeMap = {};
+    
+    // Обрабатываем задачи батчами по 50
+    for (let i = 0; i < uniqueTaskIds.length; i += 50) {
+      const chunk = uniqueTaskIds.slice(i, i + 50);
+      
+      const elapsedItems = await getTaskElapsedItems(
+        chunk,
+        {'ID': 'desc'}, 
+        [], 
+        ['ID', 'SECONDS', 'USER_ID', 'TASK_ID']
+      );
+ 
+      // Обрабатываем полученные данные
+      chunk.forEach((taskId, index) => {
+        const timeRecords = elapsedItems[index];
+         
+        if (timeRecords && Array.isArray(timeRecords)) {
+          // Находим заявку, связанную с этой задачей
+          const relatedInvoice = invoicesData.find(invoice => 
+            parseInt(invoice.ufCrm_47_1701780020523) === taskId
+          );
+          
+          if (relatedInvoice) {
+            const responsibleId = relatedInvoice.ufCrm_47_1700468491; // ID исполнителя заявки
+            
+            // Фильтруем записи: оставляем только те, где USER_ID = responsibleId заявки
+            const responsibleTimeRecords = timeRecords.filter(record => 
+              record.USER_ID == responsibleId
+            );
+            
+            // Суммируем время в секундах
+            const totalSeconds = responsibleTimeRecords.reduce((sum, record) => 
+              sum + (+record.SECONDS || 0), 0
+            );
+
+            // Сохраняем время в часах
+            taskTimeMap[taskId] = Math.round((totalSeconds / 3600) * 100) / 100;
+          }
+        }
+      });
+    }
+            console.log(taskTimeMap);
+    return taskTimeMap;
+  } catch (error) {
+    console.error('Ошибка при получении времени задач заявок:', error);
+    return {};
+  }
+};
+const calculateOverdueDeals = async (data) => {
   const userMap = {};
+  
+  // Получаем время затраченное на связанные задачи
+  const taskTimeMap = await getInvoiceTasksTime(data);
   
   data.forEach(deal => {
     const userId = deal.ufCrm_47_1700468491; // Исполнитель
@@ -558,12 +652,15 @@ const calculateOverdueDeals = (data) => {
     if (!userMap[userId]) {
       userMap[userId] = {
         userId,
-        userName: findUserNameById(userId, users.value),
+        userName: findUserNameById(userId, invoiceUsers.value),
         totalDeals: 0,
         overdueCount: 0,
         closedCount: 0,
         openCount: 0,
-        totalTimeSpent: 0,
+        slaCompletedCount: 0,
+        slaNotCompletedCount: 0,
+        slaNotCompletedPercentage: 0,
+        totalTimeSpent: 0, // В часах
         overdueTimeSpent: 0,
         overduePercentage: 0,
       };
@@ -571,49 +668,58 @@ const calculateOverdueDeals = (data) => {
     
     userMap[userId].totalDeals++;
     
-    // Проверяем, была ли сделка просрочена
-    const deadline = moment(deal.ufCrm_47_1704813732503); // Планируемая дата завершения
-    const closeDate = deal.closedate ? moment(deal.closedate) : null; // Фактическая дата завершения
-    const createDate = moment(deal.begindate); // Дата создания сделки
+    const slaStatus = deal.ufCrm_47_1752010288013;
+    if (slaStatus === 12257) {
+      userMap[userId].slaCompletedCount++;
+    } else {
+      userMap[userId].slaNotCompletedCount++;
+    }
     
-    // Расчет времени, затраченного на сделку (в миллисекундах)
-    if (deal.stageId === "DT172_69:SUCCESS" && closeDate) {
-      userMap[userId].totalTimeSpent += closeDate.diff(createDate);
+    // Проверяем статус сделки
+    if (deal.stageId === "DT172_69:SUCCESS") {
       userMap[userId].closedCount++;
-    } else if (deal.stageId !== "DT172_69:SUCCESS") {
-      // Для открытых сделок считаем время от создания до текущего момента
-      userMap[userId].totalTimeSpent += moment().diff(createDate);
+    } else {
       userMap[userId].openCount++;
     }
     
-    // Проверка на просрочку
+    // РАСЧЕТ ВРЕМЕНИ: используем время из связанной задачи
+    const taskId = deal.ufCrm_47_1701780020523;
+    if (taskId && taskTimeMap[taskId]) {
+      // Используем время из задачи
+      userMap[userId].totalTimeSpent += taskTimeMap[taskId];
+    }
+    
+    // Проверка на просрочку (оставляем без изменений)
+    const deadline = moment(deal.ufCrm_47_1704813732503);
+    const closeDate = deal.closedate ? moment(deal.closedate) : null;
+    
     if (closeDate && closeDate.isAfter(deadline) && deal.stageId !== "DT172_69:SUCCESS") {
       userMap[userId].overdueCount++;
-      userMap[userId].overdueTimeSpent += moment().diff(deadline);
+      userMap[userId].overdueTimeSpent += moment().diff(deadline) / (1000 * 60 * 60); // Конвертируем в часы
     }
   });
   
   // Преобразуем данные для вывода
   const result = Object.values(userMap).map(user => {
-    // Рассчитываем процент просроченных сделок
     const overduePercentage = user.totalDeals > 0 
       ? Math.round((user.overdueCount / user.totalDeals) * 100) 
       : 0;
 
-    const totalTimeSpent = user.totalDeals > 0
-    ? formatMillisecondsToDHM(user.totalTimeSpent)
-    : '0 дней 0 часов 0 минут';
+    const slaNotCompletedPercentage = user.totalDeals > 0 
+      ? Math.round((user.slaNotCompletedCount / user.totalDeals) * 100) 
+      : 0;
 
-    const overdueTimeSpent = user.totalDeals > 0
-    ? formatMillisecondsToDHM(user.overdueTimeSpent)
-    : '0 дней 0 часов 0 минут';
+    // Форматируем время в читаемый формат
+    const totalTimeSpentFormatted = user.totalTimeSpent;
+    const overdueTimeSpentFormatted = user.overdueTimeSpent;
 
     return {
       ...user,
       overduePercentage,
-      totalTimeSpent,
-      overdueTimeSpent,
-      // Можно добавить другие вычисляемые поля
+      totalTimeSpent: totalTimeSpentFormatted,
+      totalTimeSpentHours: user.totalTimeSpent, // Сохраняем числовое значение для сортировки
+      overdueTimeSpent: overdueTimeSpentFormatted,
+      slaNotCompletedPercentage,
     };
   });
   
@@ -1079,6 +1185,9 @@ const getSummary = (userName) => pivotTableDate.value.find(u => u.userName === u
   openCount: 0,
   closedCount: 0,
   totalDeals: 0,
+  slaCompletedCount: 0,    // Добавляем по умолчанию
+  slaNotCompletedCount: 0, // Добавляем по умолчанию
+  slaNotCompletedPercentage: 0, // Добавляем значение по умолчанию
   totalTimeSpent: '0 дней 0 часов 0 минут',
   overdueCount: 0,
   overduePercentage: 0,
@@ -1237,40 +1346,6 @@ const handleTasksData = async (tasks) => {
     }
 };
 
-// Функция для экспорта данных в Excel
-const exportToExcel = (data, fileName) => {
-  try {
-    // Создаем рабочую книгу
-    const wb = XLSX.utils.book_new();
-    
-    // Преобразуем данные в формат для Excel
-    const excelData = data.map(item => ({
-      'Исполнитель': item.userName,
-      'Открыто': item.openCount,
-      'Закрыто': item.closedCount,
-      'Всего': item.totalDeals,
-      'Времени затрачено': item.totalTimeSpent,
-      'Просрочено': item.overdueCount,
-      'Просрочено %': `${item.overduePercentage}%`,
-      'Время просрочки': item.overdueTimeSpent
-    }));
-    
-    // Создаем лист
-    const ws = XLSX.utils.json_to_sheet(excelData);
-    
-    // Добавляем лист в книгу
-    XLSX.utils.book_append_sheet(wb, ws, 'Отчет по заявкам');
-    
-    // Скачиваем файл
-    XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
-    
-  } catch (error) {
-    console.error('Ошибка при экспорте в Excel:', error);
-    errorDisplay.value = 'Ошибка при экспорте в Excel';
-    errorDialog.value = true;
-  }
-};
-
 // Функция для экспорта задач в Excel
 const exportTasksToExcel = (data, fileName) => {
   try {
@@ -1288,6 +1363,36 @@ const exportTasksToExcel = (data, fileName) => {
     }));
     
     const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Добавляем гиперссылки на название задачи (первый столбец)
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    
+    // Проходим по всем строкам (начиная со второй, так как первая - заголовок)
+    for (let row = range.s.r + 1; row <= range.e.r; row++) {
+      const cellAddress = XLSX.utils.encode_cell({ c: 0, r: row }); // Столбец A (Наименование)
+      
+      if (ws[cellAddress]) {
+        const taskIndex = row - 1; // Индекс в массиве data
+        const taskId = data[taskIndex].id;
+        
+        // Формируем URL для задачи в Bitrix24
+        const url = `https://ortonica.bitrix24.ru/company/personal/user/${currentUser.value}/tasks/task/view/${taskId}/`;
+        
+        // Добавляем гиперссылку к ячейке
+        if (!ws[cellAddress].l) {
+          ws[cellAddress].l = {};
+        }
+        ws[cellAddress].l.Target = url;
+        ws[cellAddress].l.Tooltip = 'Открыть задачу в Bitrix24';
+        
+        // Также можно добавить стиль для визуального обозначения ссылки
+        if (!ws[cellAddress].s) {
+          ws[cellAddress].s = {};
+        }
+        ws[cellAddress].s.font = { color: { rgb: '0000FF' }, underline: true };
+      }
+    }
+
     XLSX.utils.book_append_sheet(wb, ws, 'Отчет по задачам');
     XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
     
@@ -1318,6 +1423,21 @@ const exportDetailedInvoicesToExcel = () => {
     }));
     
     const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Добавляем гиперссылки на название заявки (четвертый столбец)
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let row = range.s.r + 1; row <= range.e.r; row++) {
+      const cellAddress = XLSX.utils.encode_cell({ c: 3, r: row }); // Столбец D (Название)
+      if (ws[cellAddress]) {
+        const itemIndex = row - 1;
+        const itemId = itemsTableDate.value[itemIndex].id;
+        const url = `https://ortonica.bitrix24.ru/page/servicedesk_test/servis_desk_2/type/172/details/${itemId}/`;
+        
+        ws[cellAddress].l = { Target: url, Tooltip: 'Открыть заявку в Bitrix24' };
+        ws[cellAddress].s = { font: { color: { rgb: '0000FF' }, underline: true } };
+      }
+    }
+
     XLSX.utils.book_append_sheet(wb, ws, 'Детализированные данные');
     XLSX.writeFile(wb, `Детальный_отчет_по_заявкам_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
     
@@ -1362,6 +1482,70 @@ const getTaskSummary = (responsibleName) => {
     newTasks: userTasks.filter(task => task.statusLabel  === "Ждет выполнения" || "Новая").length
   };
 };
+const invoicesTable = ref(null);
+const tasksTable = ref(null);
+
+// Функция для обработки нажатий клавиш
+const handleTableKeydown = (event) => {
+  const tableElement = event.currentTarget;
+  const scrollStep = 50; // Шаг скролла в пикселях
+
+  switch (event.key) {
+    case 'ArrowUp':
+      event.preventDefault();
+      tableElement.scrollTop -= scrollStep;
+      break;
+    case 'ArrowDown':
+      event.preventDefault();
+      tableElement.scrollTop += scrollStep;
+      break;
+    case 'ArrowLeft':
+      event.preventDefault();
+      tableElement.scrollLeft -= scrollStep;
+      break;
+    case 'ArrowRight':
+      event.preventDefault();
+      tableElement.scrollLeft += scrollStep;
+      break;
+    case 'Home':
+      event.preventDefault();
+      tableElement.scrollTop = 0;
+      break;
+    case 'End':
+      event.preventDefault();
+      tableElement.scrollTop = tableElement.scrollHeight;
+      break;
+    case 'PageUp':
+      event.preventDefault();
+      tableElement.scrollTop -= tableElement.clientHeight;
+      break;
+    case 'PageDown':
+      event.preventDefault();
+      tableElement.scrollTop += tableElement.clientHeight;
+      break;
+  }
+};
+
+// Функция для фокусировки на таблице при открытии диалога
+watch(report1Dialog, (newVal) => {
+  if (newVal) {
+    nextTick(() => {
+      if (invoicesTable.value) {
+        invoicesTable.value.$el.focus();
+      }
+    });
+  }
+});
+
+watch(report2Dialog, (newVal) => {
+  if (newVal) {
+    nextTick(() => {
+      if (tasksTable.value) {
+        tasksTable.value.$el.focus();
+      }
+    });
+  }
+});
 
 // Сбрасываем выбор при закрытии диалога
 watch(reportsDialog, (newVal) => {
