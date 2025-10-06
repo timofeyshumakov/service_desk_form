@@ -216,7 +216,7 @@
   </v-dialog>
 
   <!-- Диалог отчета 1 (существующий) -->
-  <v-dialog v-model="report1Dialog" max-width="1200" scrollable>
+  <v-dialog v-model="report1Dialog" scrollable>
     <v-card>
       <v-card-title class="success white--text d-flex justify-space-between align-center">
         <div class="d-flex align-center">
@@ -409,7 +409,7 @@
       </v-card-text>
     </v-card>
   </v-dialog>
-  <v-dialog v-model="report3Dialog" max-width="1200" scrollable>
+  <v-dialog v-model="report3Dialog" scrollable>
   <v-card>
     <v-card-title class="primary white--text d-flex success justify-space-between align-center">
       <div class="d-flex align-center">
@@ -437,7 +437,7 @@
       <TheForm 
         @update-task-data="handleDetailedTasksData" 
         :users="invoiceUsers" 
-        reportType="tasks"
+        reportType="tasksDetails"
       ></TheForm>
       
       <div v-if="tasksDetailedLoading" class="table-loading">
@@ -1350,8 +1350,9 @@ const handleDetailedTasksData = async (tasks) => {
       timeFilter['<=CREATED_DATE'] = "2025-09-01";
     }
 console.log(sessionStorage.getItem("selectedUsers"));
+
     const elapsedItems = await getTaskElapsedItems(
-      {'>=CREATED_DATE': filteredDate[0].split("T")[0], '<=CREATED_DATE': filteredDate[1].split("T")[0]},
+      {'>=CREATED_DATE': filteredDate[0].split("T")[0], '<=CREATED_DATE': filteredDate[1].split("T")[0], "USER_ID": sessionStorage.getItem("selectedUsers").split(",")},
       ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE"], 
       ''
     );
