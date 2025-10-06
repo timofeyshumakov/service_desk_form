@@ -165,7 +165,6 @@ const submit = async () => {
   parseStore.setSelect(entitySettings.selectFields)
 
   let responseData
-  let totalOpportunity
   let total
 
   myStore.clearItems()

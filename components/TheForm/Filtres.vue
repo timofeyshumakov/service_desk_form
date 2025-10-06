@@ -129,6 +129,9 @@ export default {
                 this.parseStore.setFilter("GROUP_ID", 517);
                 this.$emit('update:selected-task-types', this.selectedTaskTypes);
             }
+            sessionStorage.setItem("date", this.selectedDateIso);
+            sessionStorage.setItem("selectedUsers", this.selectedUsers);
+            console.log(this.selectedUsers);
         },
         
         // Загрузка сотрудников для задач из API

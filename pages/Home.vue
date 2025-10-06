@@ -320,9 +320,9 @@
   </v-dialog>
 
   <!-- Диалог отчета 2 (новый пустой) -->
-  <v-dialog v-model="report2Dialog" max-width="800">
+  <v-dialog v-model="report2Dialog">
     <v-card>
-      <v-card-title class="primary white--text d-flex justify-space-between align-center">
+      <v-card-title class="primary white--text d-flex success justify-space-between align-center">
         <div class="d-flex align-center">
           <v-btn icon @click="backToReportsMenu" class="mr-2">
             <v-icon>mdi-arrow-left</v-icon>
@@ -330,20 +330,21 @@
           Отчет по задачам
         </div>
         <div class="d-flex align-center">
-          <v-btn 
-            icon 
-            @click="exportTasksToExcel(tasksTableDate, 'Отчет_по_задачам')"
-            title="Экспорт в Excel"
-            class="mr-2"
-          >
-            <v-icon>mdi-file-excel</v-icon>
+          <div class="d-flex align-center">
+            <v-btn 
+              icon 
+              @click="exportTasksToExcel(tasksTableDate, 'Отчет_по_задачам')"
+              title="Экспорт в Excel"
+              class="mr-2"
+            >
+              <v-icon>mdi-file-excel</v-icon>
+            </v-btn>
+          </div>
+          <v-btn icon small @click="closeAllDialogs" class="ma-1">
+            <v-icon>mdi-close</v-icon>
           </v-btn>
         </div>
-        <v-btn icon small @click="closeAllDialogs" class="ma-1">
-          <v-icon>mdi-close</v-icon>
-        </v-btn>
       </v-card-title>
-      
       <v-card-text class="pa-6 text-center">
         <TheForm @update-task-data="handleFilteredTasksData" @updateTaskData="handleTasksData" :users="taskUsers" reportType="tasks"></TheForm>
 <div v-if="tasksLoading" class="table-loading">
@@ -392,7 +393,7 @@
                     </div>
                     <div class="stat-item">
                       <span class="stat-number">{{ getTaskSummary(item.value).totalTimeSpent }}</span>
-                      <span class="stat-label">Затрачено времени</span>
+                      <span class="stat-label">Время затрачено:</span>
                     </div>
                   </div>
                 </div>
@@ -408,6 +409,115 @@
       </v-card-text>
     </v-card>
   </v-dialog>
+  <v-dialog v-model="report3Dialog" max-width="1200" scrollable>
+  <v-card>
+    <v-card-title class="primary white--text d-flex success justify-space-between align-center">
+      <div class="d-flex align-center">
+        <v-btn icon @click="backToReportsMenu" class="mr-2">
+          <v-icon>mdi-arrow-left</v-icon>
+        </v-btn>
+        Отчет по задачам с детализацией
+      </div>
+      <div class="d-flex align-center">
+        <v-btn 
+          icon 
+          @click="exportTasksDetailedToExcel(tasksDetailedTableDate, 'Отчет_по_задачам_детализированный')"
+          title="Экспорт в Excel"
+          class="mr-2"
+        >
+          <v-icon>mdi-file-excel</v-icon>
+        </v-btn>
+        <v-btn icon small @click="report3Dialog = false" class="ma-1">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </div>
+    </v-card-title>
+    
+    <v-card-text>
+      <TheForm 
+        @update-task-data="handleDetailedTasksData" 
+        :users="invoiceUsers" 
+        reportType="tasks"
+      ></TheForm>
+      
+      <div v-if="tasksDetailedLoading" class="table-loading">
+        <v-progress-circular indeterminate color="primary"></v-progress-circular>
+        <span>Загрузка данных...</span>
+      </div>
+      
+      <v-data-table 
+        v-else
+        :items="tasksDetailedTableDate" 
+        :headers="tasksDetailedTableHeaders" 
+        :group-by="[{ key: 'responsibleFullName', order: 'asc' }]" 
+        items-per-page="-1" 
+        hide-default-footer
+        ref="tasksDetailedTable"
+        @keydown="handleTableKeydown"
+        tabindex="0"
+      >
+        <template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
+          <tr>
+            <td :colspan="columns.length" class="summary-grid-container">
+              <div class="summary-grid-compact">
+                <div class="grid-header">
+                  <v-btn size="small" :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'" 
+                        @click="toggleGroup(item)" class="toggle-btn"></v-btn>
+                  <span class="executor-name">{{ item.value }}</span>
+                </div>
+                
+                <div class="grid-stats">
+                  <div class="stat-item">
+                    <span class="stat-number">{{ getDetailedTaskSummary(item.value).totalTasks }}</span>
+                    <span class="stat-label">Всего задач</span>
+                  </div>
+                  
+                  <div class="stat-item">
+                    <span class="stat-number">{{ getDetailedTaskSummary(item.value).completedTasks }}</span>
+                    <span class="stat-label">Завершено</span>
+                  </div>
+                  
+                  <div class="stat-item">
+                    <span class="stat-number">{{ getDetailedTaskSummary(item.value).inProgressTasks }}</span>
+                    <span class="stat-label">В работе</span>
+                  </div>
+                  
+                  <div class="stat-item">
+                    <span class="stat-number">{{ getDetailedTaskSummary(item.value).newTasks }}</span>
+                    <span class="stat-label">Новые</span>
+                  </div>
+                  
+                  <div class="stat-item">
+                    <span class="stat-number">{{ getDetailedTaskSummary(item.value).totalTimeSpent }}</span>
+                    <span class="stat-label">Время затрачено:</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </template>
+        
+        <template v-slot:item.title="{ item }">
+          <a 
+            :href="`https://ortonica.bitrix24.ru/company/personal/user/${currentUser}/tasks/task/view/${item.id}/`" 
+            target="_blank" 
+            class="task-link"
+          >
+            {{ item.title }}
+          </a>
+        </template>
+        
+        <template v-slot:item.timeSpentInLogs="{ item }">
+          <span class="time-spent">{{ item.timeSpentInLogs }}</span>
+        </template>
+        
+        <template v-slot:item.statusLabel="{ item }">
+          {{ item.statusLabel }}
+        </template>
+      </v-data-table>
+    </v-card-text>
+  </v-card>
+</v-dialog>
   </v-app>
 </template>
 
@@ -581,14 +691,14 @@ const getInvoiceTasksTime = async (invoicesData) => {
     // Обрабатываем задачи батчами по 50
     for (let i = 0; i < uniqueTaskIds.length; i += 50) {
       const chunk = uniqueTaskIds.slice(i, i + 50);
-      
+      /*
       const elapsedItems = await getTaskElapsedItems(
         chunk,
         {'ID': 'desc'}, 
         [], 
         ['ID', 'SECONDS', 'USER_ID']
       );
- 
+ */
       // Обрабатываем полученные данные
       chunk.forEach((taskId, index) => {
         const timeRecords = elapsedItems[index];
@@ -1196,11 +1306,325 @@ const reports = ref([
   {
     id: 2,
     title: 'Затраченное время по задачам',
-    description: 'Зачтаченное время на задачи по ответственному',
+    description: 'Затраченное время на задачи по ответственному',
     icon: 'mdi-clock-outline'
+  },
+  {
+    id: 3,
+    title: 'Отчет по задачам категории ИТ',
+    description: 'Количество задач и затраченное время с фильтрами',
+    icon: 'mdi-chart-bar'
   }
 ]);
+const report3Dialog = ref(false);
+const tasksDetailedTableDate = ref([]);
+const tasksDetailedLoading = ref(false);
 
+// Заголовки таблицы для детализированного отчета по задачам
+const tasksDetailedTableHeaders = ref([
+  { title: 'Наименование', value: 'title', sortable: true, width: '300px' },
+  { title: 'Статус', value: 'statusLabel', sortable: true, width: '150px' },
+  { title: 'Постановщик', value: 'creatorFullName', sortable: true, width: '200px' },
+  { title: 'Время затрачено', value: 'timeSpentInLogs', sortable: true, width: '150px' },
+  { title: 'Дата создания', value: 'createdDateFormatted', sortable: true, width: '150px' },
+  { title: 'Дедлайн', value: 'deadlineFormatted', sortable: true, width: '150px' },
+  //{ title: 'Приоритет', value: 'priorityLabel', sortable: true, width: '120px' },
+]);
+// Обработчик данных для детализированного отчета по задачам
+const handleDetailedTasksData = async (tasks) => {
+  try {
+    tasksDetailedLoading.value = true;
+    
+    // Получаем все записи о затраченном времени
+    const filteredDate = sessionStorage.getItem("date")?.split(",") || [];
+    console.log("Фильтр даты:", filteredDate);
+    
+    // Создаем фильтр для временных записей
+    const timeFilter = {};
+    if (filteredDate.length >= 2) {
+      timeFilter['>=CREATED_DATE'] = filteredDate[0].split("T")[0];
+      timeFilter['<=CREATED_DATE'] = filteredDate[1].split("T")[0];
+    } else {
+      // Значения по умолчанию, если даты не установлены
+      timeFilter['>=CREATED_DATE'] = "2025-08-01";
+      timeFilter['<=CREATED_DATE'] = "2025-09-01";
+    }
+console.log(sessionStorage.getItem("selectedUsers"));
+    const elapsedItems = await getTaskElapsedItems(
+      {'>=CREATED_DATE': filteredDate[0].split("T")[0], '<=CREATED_DATE': filteredDate[1].split("T")[0]},
+      ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE"], 
+      ''
+    );
+
+    console.log("Получено записей времени:", elapsedItems.length);
+
+    // Получаем ID пользователей из taskUsers для фильтрации
+    const taskUserIds = invoiceUsers.value.map(user => user.ID.toString());
+    console.log("Пользователи для учета:", taskUserIds);
+    // Группируем записи времени по задачам и пользователям (только для taskUsers)
+    const taskTimeByUser = {};
+    const taskUserRecords = {}; // Для отслеживания пользователей, работавших над задачами
+    
+    elapsedItems.forEach(item => {
+      const taskId = item.TASK_ID;
+      const userId = item.USER_ID.toString();
+      const seconds = parseInt(item.SECONDS) || 0;
+      
+      // Фильтруем только пользователей из taskUsers
+      if (!taskUserIds.includes(userId)) {
+        return;
+      }
+      
+      if (!taskTimeByUser[taskId]) {
+        taskTimeByUser[taskId] = {};
+        taskUserRecords[taskId] = new Set(); // Для отслеживания уникальных пользователей
+      }
+      
+      if (!taskTimeByUser[taskId][userId]) {
+        taskTimeByUser[taskId][userId] = 0;
+      }
+      
+      taskTimeByUser[taskId][userId] += seconds;
+      taskUserRecords[taskId].add(userId);
+    });
+
+    console.log("Задачи с временем:", Object.keys(taskTimeByUser).length);
+
+    // Получаем детальную информацию о задачах
+    const uniqueTaskIds = [...new Set(elapsedItems.map(item => item.TASK_ID))];
+    console.log("Уникальных задач:", uniqueTaskIds.length);
+
+    let tasksDetailedData = [];
+    
+    if (uniqueTaskIds.length > 0) {
+      tasksDetailedData = await callApi(
+        "tasks.task.list", 
+        {"ID": uniqueTaskIds}, 
+        ['id','title','description','status','responsibleId','createdDate','deadline','priority','groupId', "timeSpentInLogs", "createdBy", "createdByName", "createdByLastName", "createdBySecondName", "responsibleName", "responsibleLastName", "responsibleSecondName"]
+      );
+
+      // Преобразуем структуру данных
+      if (Array.isArray(tasksDetailedData)) {
+        tasksDetailedData = tasksDetailedData.reduce((acc, current) => {
+          return acc.concat(current.tasks || []);
+        }, []);
+      } else {
+        tasksDetailedData = tasksDetailedData.tasks || [];
+      }
+    }
+
+    console.log("Получено детальных данных задач:", tasksDetailedData.length);
+
+    // Создаем массив для хранения финальных данных с дублированием задач по пользователям
+    const detailedTasksWithUsers = [];
+
+    // Обрабатываем каждую задачу, для которой есть записи времени
+    Object.keys(taskTimeByUser).forEach(taskId => {
+      const timeRecords = taskTimeByUser[taskId];
+      const task = tasksDetailedData.find(t => t.id == taskId) || {
+        id: taskId,
+        title: `Задача ${taskId}`,
+        status: 0,
+        createdDate: null,
+        deadline: null,
+        priority: 2
+      };
+
+      // Создаем отдельную запись для каждого пользователя из taskUsers, который работал над задачей
+      Object.entries(timeRecords).forEach(([userId, totalSeconds]) => {
+        
+        // Находим пользователя в taskUsers
+        const workingUser = invoiceUsers.value.find(user => user.ID.toString() === userId);
+        
+        if (!workingUser) {
+          return; // Пропускаем, если пользователь не найден
+        }
+        
+        // Формируем полное имя постановщика
+        const creatorFullName = task.createdByName ? 
+          formatTaskUserName(
+            task.createdByLastName,
+            task.createdByName,
+            task.createdBySecondName
+          ) : 'Неизвестный постановщик';
+        
+        // Формируем полное имя пользователя, который работал над задачей
+        const workingUserName = formatTaskUserName(
+          workingUser.LAST_NAME,
+          workingUser.NAME,
+          workingUser.SECOND_NAME
+        );
+        
+        // Формируем полное имя исполнителя (ответственного)
+        const responsibleFullName = task.responsibleName ? 
+          formatTaskUserName(
+            task.responsibleLastName,
+            task.responsibleName,
+            task.responsibleSecondName
+          ) : 'Не назначен';
+        
+        // Преобразуем статус в читаемый формат
+        const statusLabel = TASK_STATUS_LABELS[task.status] || 'Неизвестный статус';
+        
+        // Преобразуем приоритет
+        const priorityLabel = getPriorityLabel(task.priority);
+        
+        // Форматируем даты
+        const createdDateFormatted = task.createdDate ? 
+          moment(task.createdDate).format('DD.MM.YYYY HH:mm') : 'Не указана';
+        const deadlineFormatted = task.deadline ? 
+          moment(task.deadline).format('DD.MM.YYYY HH:mm') : 'Не указан';
+        
+        // Конвертируем секунды в часы
+        const timeSpentHours = Math.round((totalSeconds / 3600) * 100) / 100;
+        
+        // Создаем уникальную запись для комбинации задача-пользователь
+        detailedTasksWithUsers.push({
+          ...task,
+          // В качестве ответственного указываем пользователя, который вносил время
+          responsibleFullName: workingUserName,
+          responsibleId: parseInt(userId),
+          creatorFullName,
+          statusLabel,
+          priorityLabel,
+          createdDateFormatted,
+          deadlineFormatted,
+          timeSpentInLogs: timeSpentHours,
+          timeSpentSeconds: totalSeconds,
+          originalResponsibleFullName: responsibleFullName, // Сохраняем оригинального ответственного
+          isTimeContributor: true, // Флаг, что это запись о времени пользователя
+          workingUserId: parseInt(userId), // ID пользователя, который работал над задачей
+          uniqueKey: `${task.id}_${userId}` // Уникальный ключ для идентификации
+        });
+      });
+    });
+
+    // Сортируем задачи по ID для удобства просмотра
+    detailedTasksWithUsers.sort((a, b) => a.id - b.id);
+
+    console.log("Финальный набор данных:", detailedTasksWithUsers.length, "записей");
+
+    // Обновляем данные таблицы
+    tasksDetailedTableDate.value = detailedTasksWithUsers;
+
+  } catch (error) {
+    console.error('Ошибка при получении затраченного времени для детализированного отчета:', error);
+    errorDisplay.value = 'Ошибка при загрузке детализированных данных по задачам';
+    errorDialog.value = true;
+  } finally {
+    tasksDetailedLoading.value = false;
+  }
+};
+// Обновляем функцию getDetailedTaskSummary для работы с новой структурой данных
+const getDetailedTaskSummary = (responsibleName) => {
+  const userTasks = tasksDetailedTableDate.value.filter(task => 
+    task.responsibleFullName === responsibleName
+  );
+  
+  const totalTimeSpent = userTasks.reduce((sum, task) => sum + (task.timeSpentInLogs || 0), 0);
+  
+  // Подсчитываем уникальные задачи (исключая дубликаты по пользователям)
+  const uniqueTaskIds = [...new Set(userTasks.map(task => task.id))];
+  
+  // Получаем статусы уникальных задач
+  const uniqueTasks = uniqueTaskIds.map(taskId => {
+    return tasksDetailedTableDate.value.find(task => task.id === taskId && task.responsibleFullName === responsibleName);
+  }).filter(Boolean);
+
+  // Подсчитываем задачи по статусам
+  const completedTasks = uniqueTasks.filter(task => task.status == 5).length;
+  const inProgressTasks = uniqueTasks.filter(task => task.status == 3).length;
+  const newTasks = uniqueTasks.filter(task => task.status == 1 || task.status == 2).length;
+
+  return {
+    totalTasks: uniqueTaskIds.length, // Количество уникальных задач
+    totalTimeRecords: userTasks.length, // Количество записей о времени (может быть больше чем задач)
+    totalTimeSpent: totalTimeSpent.toFixed(2),
+    completedTasks: completedTasks,
+    inProgressTasks: inProgressTasks,
+    newTasks: newTasks,
+    avgTimePerTask: uniqueTaskIds.length > 0 ? (totalTimeSpent / uniqueTaskIds.length).toFixed(2) : 0
+  };
+};
+// Функция для получения цвета статуса
+const getStatusColor = (status) => {
+  switch (status) {
+    case TASK_STATUS.STATE_COMPLETED:
+      return 'success';
+    case TASK_STATUS.STATE_IN_PROGRESS:
+      return 'primary';
+    case TASK_STATUS.STATE_NEW:
+      return 'warning';
+    case TASK_STATUS.STATE_PENDING:
+      return 'info';
+    case TASK_STATUS.STATE_DECLINED:
+      return 'error';
+    default:
+      return 'default';
+  }
+};
+
+// Функция для преобразования приоритета в читаемый формат
+const getPriorityLabel = (priority) => {
+  const priorityMap = {
+    1: 'Низкий',
+    2: 'Средний', 
+    3: 'Высокий'
+  };
+  return priorityMap[priority] || 'Не указан';
+};
+
+// Функция для экспорта детализированных данных по задачам
+const exportTasksDetailedToExcel = (data, fileName) => {
+  try {
+    const wb = XLSX.utils.book_new();
+    
+    const excelData = data.map(item => ({
+      'Наименование': item.title,
+      'Статус': item.statusLabel,
+      'Постановщик': item.creatorFullName,
+      'Исполнитель': item.responsibleFullName,
+      'Время затрачено': item.timeSpentInLogs,
+      'Дата создания': item.createdDateFormatted,
+      'Дедлайн': item.deadlineFormatted,
+      'Приоритет': item.priorityLabel
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Добавляем гиперссылки на название задачи
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    
+    for (let row = range.s.r + 1; row <= range.e.r; row++) {
+      const cellAddress = XLSX.utils.encode_cell({ c: 0, r: row });
+      
+      if (ws[cellAddress]) {
+        const taskIndex = row - 1;
+        const taskId = data[taskIndex].id;
+        const url = `https://ortonica.bitrix24.ru/company/personal/user/${currentUser.value}/tasks/task/view/${taskId}/`;
+        
+        if (!ws[cellAddress].l) {
+          ws[cellAddress].l = {};
+        }
+        ws[cellAddress].l.Target = url;
+        ws[cellAddress].l.Tooltip = 'Открыть задачу в Bitrix24';
+        
+        if (!ws[cellAddress].s) {
+          ws[cellAddress].s = {};
+        }
+        ws[cellAddress].s.font = { color: { rgb: '0000FF' }, underline: true };
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Детализированные задачи');
+    XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
+    
+  } catch (error) {
+    console.error('Ошибка при экспорте детализированных задач в Excel:', error);
+    errorDisplay.value = 'Ошибка при экспорте детализированных задач в Excel';
+    errorDialog.value = true;
+  }
+};
 const selectReport = (reportId) => {
   selectedReport.value = reportId;
 };
@@ -1213,11 +1637,7 @@ const openSelectedReport = () => {
   }
   reportsDialog.value = false;
 };
-const backToReportsMenu = () => {
-  report1Dialog.value = false;
-  report2Dialog.value = false;
-  reportsDialog.value = true;
-};
+
 const openReport = (reportId) => {
   reportsDialog.value = false;
   
@@ -1225,7 +1645,17 @@ const openReport = (reportId) => {
     report1Dialog.value = true;
   } else if (reportId === 2) {
     report2Dialog.value = true;
+  } else if (reportId === 3) {
+    report3Dialog.value = true;
   }
+};
+
+// Обновим функцию backToReportsMenu
+const backToReportsMenu = () => {
+  report1Dialog.value = false;
+  report2Dialog.value = false;
+  report3Dialog.value = false;
+  reportsDialog.value = true;
 };
 const TASK_STATUS = {
   STATE_NEW: 1,
@@ -1294,7 +1724,7 @@ const handleTasksData = async (tasks) => {
     const chunk = tasksTableDate.value.slice(i, i + 50);
     const taskIds = chunk.map(task => task.id);
 
-    
+    /*
       // Получаем затраченное время для текущего блока задач
       const elapsedItems = await getTaskElapsedItems(
         taskIds,
@@ -1302,7 +1732,7 @@ const handleTasksData = async (tasks) => {
         [], 
         ['ID', 'SECONDS', 'USER_ID']
       );
-
+*/
       // Обрабатываем каждый элемент чанка
       chunk.forEach((task, index) => {
         // Получаем записи времени для текущей задачи
@@ -1470,7 +1900,7 @@ const getTaskSummary = (responsibleName) => {
 };
 const invoicesTable = ref(null);
 const tasksTable = ref(null);
-
+const tasksDetailedTable = ref(null);
 // Функция для обработки нажатий клавиш
 const handleTableKeydown = (event) => {
   const tableElement = event.currentTarget;
@@ -1511,7 +1941,12 @@ const handleTableKeydown = (event) => {
       break;
   }
 };
-
+const closeAllDialogs = () => {
+  report1Dialog.value = false;
+  report2Dialog.value = false;
+  report3Dialog.value = false;
+  reportsDialog.value = false;
+};
 // Функция для фокусировки на таблице при открытии диалога
 watch(report1Dialog, (newVal) => {
   if (newVal) {
@@ -1532,7 +1967,15 @@ watch(report2Dialog, (newVal) => {
     });
   }
 });
-
+watch(report3Dialog, (newVal) => {
+  if (newVal) {
+    nextTick(() => {
+      if (tasksDetailedTable.value) {
+        tasksDetailedTable.value.$el.focus();
+      }
+    });
+  }
+});
 // Сбрасываем выбор при закрытии диалога
 watch(reportsDialog, (newVal) => {
   if (!newVal) {

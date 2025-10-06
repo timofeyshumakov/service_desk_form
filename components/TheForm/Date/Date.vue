@@ -240,13 +240,12 @@ export default {
             default:
                 break;
             }
-            console.log(this.selectedDate[0]);
+
             this.selectedDateIso[0] = this.selectedDate[0] ? this.selectedDate[0].subtract(12, 'hours').toISOString() : null;
             this.selectedDateIso[1] = this.selectedDate[1] ? this.selectedDate[1].add(12, 'hours').toISOString() : null;
             this.$emit('update:selectedDateIso[0]', this.selectedDateIso[0]);
             this.$emit('update:selectedDateIso[1]', this.selectedDateIso[1]);
             this.$emit('sendValue', this.selectedDateIso);
-            console.log(this.selectedDateIso[0]);
         },
     },
     mounted(){
