@@ -691,14 +691,15 @@ const getInvoiceTasksTime = async (invoicesData) => {
     // Обрабатываем задачи батчами по 50
     for (let i = 0; i < uniqueTaskIds.length; i += 50) {
       const chunk = uniqueTaskIds.slice(i, i + 50);
-      /*
-      const elapsedItems = await getTaskElapsedItems(
-        chunk,
-        {'ID': 'desc'}, 
-        [], 
-        ['ID', 'SECONDS', 'USER_ID']
-      );
- */
+
+    const elapsedItems = await getTaskElapsedItems(
+      {'TASK_ID': chunk},
+      ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE"], 
+      ''
+    );
+
+console.log(elapsedItems);
+
       // Обрабатываем полученные данные
       chunk.forEach((taskId, index) => {
         const timeRecords = elapsedItems[index];
@@ -1687,80 +1688,195 @@ const tasksTableHeaders = ref([
   { title: 'Время', value: 'timeSpentInLogs', sortable: true },
 ]);
 const handleTasksData = async (tasks) => {
-  try {
-
-  tasksLoading.value = true;
-  
-  // Обрабатываем задачи - добавляем полные имена и преобразуем статусы
-  tasksTableDate.value = tasks.map(task => {
-    // Формируем полное имя постановщика
-    const creatorFullName = formatTaskUserName(
-      task.createdByLastName,
-      task.createdByName,
-      task.createdBySecondName
-    );
+ try {
+    tasksLoading.value = true;
     
-    // Формируем полное имя исполнителя
-    const responsibleFullName = formatTaskUserName(
-      task.responsibleLastName,
-      task.responsibleName,
-      task.responsibleSecondName
-    );
+    // Получаем период из фильтра
+    const filteredDate = sessionStorage.getItem("date")?.split(",") || [];
+    console.log("Фильтр даты для второго отчета:", filteredDate);
     
-    // Преобразуем статус в читаемый формат
-    const statusLabel = TASK_STATUS_LABELS[task.status] || 'Неизвестный статус';
-
-    return {
-      ...task,
-      creatorFullName,
-      responsibleFullName,
-      statusLabel,
-      timeSpentInLogs: 0, // Инициализируем поле для затраченного времени
-      timeSpentFormatted: '0 минут' // Форматированное время
-    };
-  });
-
-  // Обрабатываем задачи батчами по 50
-  for (let i = 0; i < tasksTableDate.value.length; i += 50) {
-    const chunk = tasksTableDate.value.slice(i, i + 50);
-    const taskIds = chunk.map(task => task.id);
-
-    /*
-      // Получаем затраченное время для текущего блока задач
-      const elapsedItems = await getTaskElapsedItems(
-        taskIds,
-        {'ID': 'desc'}, 
-        [], 
-        ['ID', 'SECONDS', 'USER_ID']
-      );
-*/
-      // Обрабатываем каждый элемент чанка
-      chunk.forEach((task, index) => {
-        // Получаем записи времени для текущей задачи
-        const timeRecords = elapsedItems[index];
-        
-        if (timeRecords && Array.isArray(timeRecords)) {
-          // Фильтруем записи: оставляем только те, где USER_ID = responsibleId
-          const responsibleTimeRecords = timeRecords.filter(record => 
-            record.USER_ID === task.responsibleId
-          );
-          
-          // Суммируем время в секундах
-          const totalSeconds = responsibleTimeRecords.reduce((sum, record) => 
-            sum + (+record.SECONDS || 0), 0
-          );
-          
-          // Обновляем задачу в основном массиве
-          const taskIndex = i + index;
-          tasksTableDate.value[taskIndex].timeSpentInLogs = Math.round((totalSeconds / 3600) * 100) / 100;
-        }
-      });
-  }
-      } catch (error) {
-      console.error('Ошибка при получении затраченного времени:', error);
-    } finally {
-      tasksLoading.value = false;
+    // Создаем фильтр для временных записей за период
+    const timeFilter = {};
+    if (filteredDate.length >= 2) {
+      timeFilter['>=CREATED_DATE'] = filteredDate[0].split("T")[0];
+      timeFilter['<=CREATED_DATE'] = filteredDate[1].split("T")[0];
+    } else {
+      // Значения по умолчанию, если даты не установлены
+      timeFilter['>=CREATED_DATE'] = "2025-08-01";
+      timeFilter['<=CREATED_DATE'] = "2025-09-01";
     }
+
+    // Получаем выбранных пользователей из фильтра
+    const selectedUsers = sessionStorage.getItem("selectedUsers")?.split(",") || [];
+    if (selectedUsers.length > 0 && selectedUsers[0] !== '') {
+      timeFilter["USER_ID"] = selectedUsers;
+    }
+
+    console.log("Фильтр для временных записей:", timeFilter);
+
+    // 1. Сначала получаем все записи о затраченном времени за период
+    const elapsedItems = await getTaskElapsedItems(
+      timeFilter,
+      ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE"], 
+      ''
+    );
+
+    console.log("Найдено записей времени за период:", elapsedItems.length);
+
+    if (elapsedItems.length === 0) {
+      tasksTableDate.value = [];
+      tasksLoading.value = false;
+      return;
+    }
+
+    // 2. Извлекаем уникальные ID задач из записей времени
+    const uniqueTaskIds = [...new Set(elapsedItems.map(item => item.TASK_ID))];
+    console.log("Уникальных задач за период:", uniqueTaskIds.length);
+
+    // 3. Получаем детальную информацию о задачах по найденным ID
+    let tasksDetailedData = [];
+    
+    if (uniqueTaskIds.length > 0) {
+      // Разбиваем на батчи по 50 задач (ограничение Bitrix24)
+      //for (let i = 0; i < uniqueTaskIds.length; i += 50) {
+        //const chunk = uniqueTaskIds.slice(i, i + 50);
+        
+        const chunkData = await callApi(
+          "tasks.task.list", 
+          {"ID": uniqueTaskIds}, 
+          [
+            'id', 'title', 'description', 'status', 'responsibleId', 
+            'createdDate', 'deadline', 'priority', 'groupId', 
+            "timeSpentInLogs", "createdBy", "createdByName", "createdByLastName", 
+            "createdBySecondName", "responsibleName", "responsibleLastName", 
+            "responsibleSecondName"
+          ]
+        );
+
+        // Преобразуем структуру данных
+        if (Array.isArray(chunkData)) {
+          tasksDetailedData = tasksDetailedData.concat(chunkData.reduce((acc, current) => {
+            return acc.concat(current.tasks || []);
+          }, []));
+        } else {
+          tasksDetailedData = tasksDetailedData.concat(chunkData.tasks || []);
+        }
+      }
+    //}
+
+    console.log("Получено детальных данных задач:", tasksDetailedData.length);
+
+    // 4. Группируем записи времени по задачам и пользователям
+    const taskTimeByUser = {};
+    
+    elapsedItems.forEach(item => {
+      const taskId = item.TASK_ID;
+      const userId = item.USER_ID.toString();
+      const seconds = parseInt(item.SECONDS) || 0;
+      
+      if (!taskTimeByUser[taskId]) {
+        taskTimeByUser[taskId] = {};
+      }
+      
+      if (!taskTimeByUser[taskId][userId]) {
+        taskTimeByUser[taskId][userId] = 0;
+      }
+      
+      taskTimeByUser[taskId][userId] += seconds;
+    });
+
+    // 5. Формируем финальный массив данных для таблицы
+    const finalTasksData = [];
+
+    // Обрабатываем каждую задачу, для которой есть записи времени
+    Object.keys(taskTimeByUser).forEach(taskId => {
+      const timeRecords = taskTimeByUser[taskId];
+      const task = tasksDetailedData.find(t => t.id == taskId) || {
+        id: taskId,
+        title: `Задача ${taskId}`,
+        status: 0,
+        createdDate: null,
+        deadline: null,
+        priority: 2
+      };
+
+      // Создаем отдельную запись для каждого пользователя, который работал над задачей
+      Object.entries(timeRecords).forEach(([userId, totalSeconds]) => {
+        // Находим пользователя
+        const workingUser = taskUsers.value.find(user => user.ID.toString() === userId);
+        
+        // Формируем полное имя постановщика
+        const creatorFullName = task.createdByName ? 
+          formatTaskUserName(
+            task.createdByLastName,
+            task.createdByName,
+            task.createdBySecondName
+          ) : 'Неизвестный постановщик';
+        
+        // Формируем полное имя пользователя, который работал над задачей
+        const workingUserName = workingUser ? 
+          formatTaskUserName(
+            workingUser.LAST_NAME,
+            workingUser.NAME,
+            workingUser.SECOND_NAME
+          ) : `Пользователь ${userId}`;
+        
+        // Формируем полное имя исполнителя (ответственного)
+        const responsibleFullName = task.responsibleName ? 
+          formatTaskUserName(
+            task.responsibleLastName,
+            task.responsibleName,
+            task.responsibleSecondName
+          ) : 'Не назначен';
+        
+        // Преобразуем статус в читаемый формат
+        const statusLabel = TASK_STATUS_LABELS[task.status] || 'Неизвестный статус';
+        
+        // Преобразуем приоритет
+        const priorityLabel = getPriorityLabel(task.priority);
+        
+        // Форматируем даты
+        const createdDateFormatted = task.createdDate ? 
+          moment(task.createdDate).format('DD.MM.YYYY HH:mm') : 'Не указана';
+        
+        // Конвертируем секунды в часы
+        const timeSpentHours = Math.round((totalSeconds / 3600) * 100) / 100;
+        
+        // Создаем запись для таблицы
+        finalTasksData.push({
+          ...task,
+          // В качестве ответственного указываем пользователя, который вносил время
+          responsibleFullName: workingUserName,
+          responsibleId: parseInt(userId),
+          creatorFullName,
+          statusLabel,
+          priorityLabel,
+          createdDateFormatted,
+          timeSpentInLogs: timeSpentHours,
+          timeSpentSeconds: totalSeconds,
+          originalResponsibleFullName: responsibleFullName, // Сохраняем оригинального ответственного
+          isTimeContributor: true, // Флаг, что это запись о времени пользователя
+          workingUserId: parseInt(userId), // ID пользователя, который работал над задачей
+          uniqueKey: `${task.id}_${userId}` // Уникальный ключ для идентификации
+        });
+      });
+    });
+
+    // Сортируем задачи по ID для удобства просмотра
+    finalTasksData.sort((a, b) => a.id - b.id);
+
+    console.log("Финальный набор данных для второго отчета:", finalTasksData.length, "записей");
+
+    // Обновляем данные таблицы
+    tasksTableDate.value = finalTasksData;
+
+  } catch (error) {
+    console.error('Ошибка при получении данных для второго отчета:', error);
+    errorDisplay.value = 'Ошибка при загрузке данных для отчета по задачам';
+    errorDialog.value = true;
+  } finally {
+    tasksLoading.value = false;
+  }
 };
 
 // Функция для экспорта задач в Excel
@@ -1889,16 +2005,36 @@ function formatTaskUserName(lastName, name, secondName) {
 
 // Функция для получения сводки по задачам исполнителя
 const getTaskSummary = (responsibleName) => {
-  const userTasks = tasksTableDate.value.filter(task => task.responsibleFullName === responsibleName);
+  const userTasks = tasksTableDate.value.filter(task => 
+    task.responsibleFullName === responsibleName
+  );
+  
   const totalTimeSpent = userTasks.reduce((sum, task) => sum + (task.timeSpentInLogs || 0), 0);
+  
+  // Подсчитываем уникальные задачи (исключая дубликаты по пользователям)
+  const uniqueTaskIds = [...new Set(userTasks.map(task => task.id))];
+  
+  // Получаем статусы уникальных задач
+  const uniqueTasks = uniqueTaskIds.map(taskId => {
+    return tasksTableDate.value.find(task => task.id === taskId && task.responsibleFullName === responsibleName);
+  }).filter(Boolean);
+
+  // Подсчитываем задачи по статусам
+  const completedTasks = uniqueTasks.filter(task => task.status == 5).length;
+  const inProgressTasks = uniqueTasks.filter(task => task.status == 3).length;
+  const newTasks = uniqueTasks.filter(task => task.status == 1 || task.status == 2).length;
+
   return {
-    totalTasks: userTasks.length,
-    totalTimeSpent: totalTimeSpent,
-    completedTasks: userTasks.filter(task => task.statusLabel === "Завершена").length,
-    inProgressTasks: userTasks.filter(task => task.statusLabel === "Выполняется").length,
-    newTasks: userTasks.filter(task => task.statusLabel  === "Ждет выполнения").length + userTasks.filter(task => task.statusLabel  === "Новая").length,
+    totalTasks: uniqueTaskIds.length, // Количество уникальных задач
+    totalTimeRecords: userTasks.length, // Количество записей о времени
+    totalTimeSpent: totalTimeSpent.toFixed(2),
+    completedTasks: completedTasks,
+    inProgressTasks: inProgressTasks,
+    newTasks: newTasks,
+    avgTimePerTask: uniqueTaskIds.length > 0 ? (totalTimeSpent / uniqueTaskIds.length).toFixed(2) : 0
   };
 };
+
 const invoicesTable = ref(null);
 const tasksTable = ref(null);
 const tasksDetailedTable = ref(null);
