@@ -1,3 +1,4 @@
+
 <template>
   <v-app>
     <div v-if="isLoading" class="loading">Загрузка...</div>
@@ -416,12 +417,12 @@
         <v-btn icon @click="backToReportsMenu" class="mr-2">
           <v-icon>mdi-arrow-left</v-icon>
         </v-btn>
-        Отчет по задачам с детализацией
+        Отчет по задачам для категории ИТ
       </div>
       <div class="d-flex align-center">
         <v-btn 
           icon 
-          @click="exportTasksDetailedToExcel(tasksDetailedTableDate, 'Отчет_по_задачам_детализированный')"
+          @click="exportTasksDetailedToExcel(tasksDetailedTableDate, 'Отчет_по_задачам_категрии_ИТ')"
           title="Экспорт в Excel"
           class="mr-2"
         >
@@ -697,37 +698,54 @@ const getInvoiceTasksTime = async (invoicesData) => {
       ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE"], 
       ''
     );
+    console.log("Получено записей времени для задач заявок:", elapsedItems.length);
 
-console.log(elapsedItems);
+    // Создаем маппинг исполнителей заявок
+    const invoiceResponsibleMap = {};
+    invoicesData.forEach(invoice => {
+      if (invoice.ufCrm_47_1701780020523 && invoice.ufCrm_47_1700468491) {
+        invoiceResponsibleMap[invoice.ufCrm_47_1701780020523] = invoice.ufCrm_47_1700468491;
+      }
+    });
 
-      // Обрабатываем полученные данные
-      chunk.forEach((taskId, index) => {
-        const timeRecords = elapsedItems[index];
-        if (timeRecords && Array.isArray(timeRecords)) {
-          // Находим заявку, связанную с этой задачей
-          const relatedInvoice = invoicesData.find(invoice => 
-            parseInt(invoice.ufCrm_47_1701780020523) === taskId
-          );
-          
-          if (relatedInvoice) {
-            const responsibleId = relatedInvoice.ufCrm_47_1700468491; // ID исполнителя заявки
-            
-            // Фильтруем записи: оставляем только те, где USER_ID = responsibleId заявки
-            const responsibleTimeRecords = timeRecords.filter(record => 
-              record.USER_ID == responsibleId
-            );
-            
-            // Суммируем время в секундах
-            const totalSeconds = responsibleTimeRecords.reduce((sum, record) => 
-              sum + (+record.SECONDS || 0), 0
-            );
+    // Группируем записи времени по задачам и пользователям
+    const taskTimeByUser = {};
+    
+    elapsedItems.forEach(item => {
+      const taskId = item.TASK_ID;
+      const userId = item.USER_ID.toString();
+      const seconds = parseInt(item.SECONDS) || 0;
+      
+      if (!taskTimeByUser[taskId]) {
+        taskTimeByUser[taskId] = {};
+      }
+      
+      if (!taskTimeByUser[taskId][userId]) {
+        taskTimeByUser[taskId][userId] = 0;
+      }
+      
+      taskTimeByUser[taskId][userId] += seconds;
+    });
 
-            // Сохраняем время в часах
-            taskTimeMap[taskId] = Math.round((totalSeconds / 3600) * 100) / 100;
-          }
-        }
-      });
-    }
+    // Рассчитываем общее время для каждой задачи (только для исполнителя заявки)
+    Object.keys(taskTimeByUser).forEach(taskId => {
+      const responsibleId = invoiceResponsibleMap[taskId];
+      if (!responsibleId) return;
+
+      const timeRecords = taskTimeByUser[taskId];
+      
+      // Суммируем время только для исполнителя заявки
+      if (timeRecords[responsibleId]) {
+        const totalSeconds = timeRecords[responsibleId];
+        taskTimeMap[taskId] = Math.round((totalSeconds / 3600) * 100) / 100;
+      } else {
+        // Если у исполнителя нет записей времени, используем общее время всех пользователей
+        const totalSeconds = Object.values(timeRecords).reduce((sum, sec) => sum + sec, 0);
+        taskTimeMap[taskId] = Math.round((totalSeconds / 3600) * 100) / 100;
+      }
+    });
+  }
+    console.log("Рассчитано время для задач:", Object.keys(taskTimeMap).length);
 
     return taskTimeMap;
   } catch (error) {
@@ -1576,57 +1594,6 @@ const getPriorityLabel = (priority) => {
   return priorityMap[priority] || 'Не указан';
 };
 
-// Функция для экспорта детализированных данных по задачам
-const exportTasksDetailedToExcel = (data, fileName) => {
-  try {
-    const wb = XLSX.utils.book_new();
-    
-    const excelData = data.map(item => ({
-      'Наименование': item.title,
-      'Статус': item.statusLabel,
-      'Постановщик': item.creatorFullName,
-      'Исполнитель': item.responsibleFullName,
-      'Время затрачено': item.timeSpentInLogs,
-      'Дата создания': item.createdDateFormatted,
-      'Дедлайн': item.deadlineFormatted,
-      'Приоритет': item.priorityLabel
-    }));
-    
-    const ws = XLSX.utils.json_to_sheet(excelData);
-
-    // Добавляем гиперссылки на название задачи
-    const range = XLSX.utils.decode_range(ws['!ref']);
-    
-    for (let row = range.s.r + 1; row <= range.e.r; row++) {
-      const cellAddress = XLSX.utils.encode_cell({ c: 0, r: row });
-      
-      if (ws[cellAddress]) {
-        const taskIndex = row - 1;
-        const taskId = data[taskIndex].id;
-        const url = `https://ortonica.bitrix24.ru/company/personal/user/${currentUser.value}/tasks/task/view/${taskId}/`;
-        
-        if (!ws[cellAddress].l) {
-          ws[cellAddress].l = {};
-        }
-        ws[cellAddress].l.Target = url;
-        ws[cellAddress].l.Tooltip = 'Открыть задачу в Bitrix24';
-        
-        if (!ws[cellAddress].s) {
-          ws[cellAddress].s = {};
-        }
-        ws[cellAddress].s.font = { color: { rgb: '0000FF' }, underline: true };
-      }
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, 'Детализированные задачи');
-    XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
-    
-  } catch (error) {
-    console.error('Ошибка при экспорте детализированных задач в Excel:', error);
-    errorDisplay.value = 'Ошибка при экспорте детализированных задач в Excel';
-    errorDialog.value = true;
-  }
-};
 const selectReport = (reportId) => {
   selectedReport.value = reportId;
 };
@@ -1879,70 +1846,12 @@ const handleTasksData = async (tasks) => {
   }
 };
 
-// Функция для экспорта задач в Excel
-const exportTasksToExcel = (data, fileName) => {
-  try {
-    const wb = XLSX.utils.book_new();
-    
-    const excelData = data.map(item => ({
-      'Наименование': item.title,
-      'Статус': item.statusLabel,
-      'Постановщик': item.creatorFullName,
-      'Исполнитель': item.responsibleFullName,
-      'Затрачено времени (часы)': item.timeSpentInLogs,
-      'Дата создания': item.createdDate ? moment(item.createdDate).format('DD.MM.YYYY HH:mm') : '',
-      'Дата завершения': item.closedDate ? moment(item.closedDate).format('DD.MM.YYYY HH:mm') : '',
-      'Приоритет': item.priority || 'Не указан'
-    }));
-    
-    const ws = XLSX.utils.json_to_sheet(excelData);
-
-    // Добавляем гиперссылки на название задачи (первый столбец)
-    const range = XLSX.utils.decode_range(ws['!ref']);
-    
-    // Проходим по всем строкам (начиная со второй, так как первая - заголовок)
-    for (let row = range.s.r + 1; row <= range.e.r; row++) {
-      const cellAddress = XLSX.utils.encode_cell({ c: 0, r: row }); // Столбец A (Наименование)
-      
-      if (ws[cellAddress]) {
-        const taskIndex = row - 1; // Индекс в массиве data
-        const taskId = data[taskIndex].id;
-        
-        // Формируем URL для задачи в Bitrix24
-        const url = `https://ortonica.bitrix24.ru/company/personal/user/${currentUser.value}/tasks/task/view/${taskId}/`;
-        
-        // Добавляем гиперссылку к ячейке
-        if (!ws[cellAddress].l) {
-          ws[cellAddress].l = {};
-        }
-        ws[cellAddress].l.Target = url;
-        ws[cellAddress].l.Tooltip = 'Открыть задачу в Bitrix24';
-        
-        // Также можно добавить стиль для визуального обозначения ссылки
-        if (!ws[cellAddress].s) {
-          ws[cellAddress].s = {};
-        }
-        ws[cellAddress].s.font = { color: { rgb: '0000FF' }, underline: true };
-      }
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, 'Отчет по задачам');
-    XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
-    
-  } catch (error) {
-    console.error('Ошибка при экспорте задач в Excel:', error);
-    errorDisplay.value = 'Ошибка при экспорте задач в Excel';
-    errorDialog.value = true;
-  }
-};
-
 // Функция для экспорта детализированных данных по заявкам
 const exportDetailedInvoicesToExcel = () => {
   try {
     const wb = XLSX.utils.book_new();
     
     const excelData = itemsTableDate.value.map(item => ({
-      'ID': item.id,
       'Исполнитель': item.FULL_NAME,
       'Статус': item.stageId,
       'Название': item.title,
@@ -1960,7 +1869,7 @@ const exportDetailedInvoicesToExcel = () => {
     // Добавляем гиперссылки на название заявки (четвертый столбец)
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let row = range.s.r + 1; row <= range.e.r; row++) {
-      const cellAddress = XLSX.utils.encode_cell({ c: 3, r: row }); // Столбец D (Название)
+      const cellAddress = XLSX.utils.encode_cell({ c: 2, r: row }); // Столбец D (Название)
       if (ws[cellAddress]) {
         const itemIndex = row - 1;
         const itemId = itemsTableDate.value[itemIndex].id;
@@ -1971,8 +1880,8 @@ const exportDetailedInvoicesToExcel = () => {
       }
     }
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Детализированные данные');
-    XLSX.writeFile(wb, `Детальный_отчет_по_заявкам_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Заявки');
+    XLSX.writeFile(wb, `Отчет_по_заявкам_категории_ИТ_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
     
   } catch (error) {
     console.error('Ошибка при экспорте детализированных данных:', error);
@@ -2078,13 +1987,470 @@ const handleTableKeydown = (event) => {
       break;
   }
 };
+
+// Обновленная функция для получения записей времени для Excel
+const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
+  try {
+    const timeFilter = {
+      'TASK_ID': taskIds,
+      'USER_ID': selectedUsers
+    };
+
+    // Добавляем фильтр по дате, если он есть
+    if (dateRange && dateRange.length >= 2) {
+      timeFilter['>=CREATED_DATE'] = dateRange[0].split("T")[0];
+      timeFilter['<=CREATED_DATE'] = dateRange[1].split("T")[0];
+    }
+
+    const elapsedItems = await getTaskElapsedItems(
+      timeFilter,
+      ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE", "COMMENT_TEXT"], 
+      ''
+    );
+
+    // Получаем названия задач
+    let tasksData = [];
+    if (taskIds.length > 0) {
+      tasksData = await callApi(
+        "tasks.task.list", 
+        {"ID": taskIds}, 
+        ['id', 'title']
+      );
+
+      // Преобразуем структуру данных
+      if (Array.isArray(tasksData)) {
+        tasksData = tasksData.reduce((acc, current) => {
+          return acc.concat(current.tasks || []);
+        }, []);
+      } else {
+        tasksData = tasksData.tasks || [];
+      }
+    }
+
+    // Создаем маппинг ID задачи -> название
+    const taskTitles = {};
+    tasksData.forEach(task => {
+      taskTitles[task.id] = task.title || `Задача ${task.id}`;
+    });
+
+    // Группируем записи по дням и пользователям
+    const recordsByDay = {};
+    
+    elapsedItems.forEach(item => {
+      const date = item.CREATED_DATE ? moment(item.CREATED_DATE).format('YYYY-MM-DD') : 'Без даты';
+      let user = taskUsers.value.find(u => u.ID.toString() === item.USER_ID.toString());
+      if(!user){
+        user = invoiceUsers.value.find(u => u.ID.toString() === item.USER_ID.toString());
+      }
+      const userName = user ? formatTaskUserName(user.LAST_NAME, user.NAME, user.SECOND_NAME) : `Пользователь ${item.USER_ID}`;
+      const taskTitle = taskTitles[item.TASK_ID] || `Задача ${item.TASK_ID}`;
+      
+      if (!recordsByDay[date]) {
+        recordsByDay[date] = {};
+      }
+      
+      if (!recordsByDay[date][userName]) {
+        recordsByDay[date][userName] = [];
+      }
+      
+      const hours = Math.round((parseInt(item.SECONDS) / 3600) * 100) / 100;
+      
+      recordsByDay[date][userName].push({
+        taskId: item.TASK_ID,
+        taskTitle: taskTitle,
+        seconds: parseInt(item.SECONDS),
+        hours: hours,
+        comment: item.COMMENT_TEXT || '',
+        date: item.CREATED_DATE
+      });
+    });
+
+    return recordsByDay;
+  } catch (error) {
+    console.error('Ошибка при получении записей времени для Excel:', error);
+    return {};
+  }
+};
+
+// Обновленная функция экспорта для отчета 2
+const exportTasksToExcel = async (data, fileName) => {
+  try {
+    const wb = XLSX.utils.book_new();
+    
+    // Основной лист с задачами
+    const excelData = data.map(item => ({
+      'Наименование': item.title,
+      'Статус': item.statusLabel,
+      'Постановщик': item.creatorFullName,
+      'Исполнитель': item.responsibleFullName,
+      'Затрачено времени (часы)': item.timeSpentInLogs,
+      'Дата создания': item.createdDate ? moment(item.createdDate).format('DD.MM.YYYY HH:mm') : '',
+      'Дата завершения': item.closedDate ? moment(item.closedDate).format('DD.MM.YYYY HH:mm') : '',
+      'Приоритет': item.priority || 'Не указан'
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Добавляем гиперссылки на название задачи
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    
+    for (let row = range.s.r + 1; row <= range.e.r; row++) {
+      const cellAddress = XLSX.utils.encode_cell({ c: 0, r: row });
+      
+      if (ws[cellAddress]) {
+        const taskIndex = row - 1;
+        const taskId = data[taskIndex].id;
+        const url = `https://ortonica.bitrix24.ru/company/personal/user/${currentUser.value}/tasks/task/view/${taskId}/`;
+        
+        if (!ws[cellAddress].l) {
+          ws[cellAddress].l = {};
+        }
+        ws[cellAddress].l.Target = url;
+        ws[cellAddress].l.Tooltip = 'Открыть задачу в Bitrix24';
+        
+        if (!ws[cellAddress].s) {
+          ws[cellAddress].s = {};
+        }
+        ws[cellAddress].s.font = { color: { rgb: '0000FF' }, underline: true };
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Отчет по задачам');
+
+    // Лист с записями времени
+    const taskIds = [...new Set(data.map(item => item.id))];
+    const selectedUsers = sessionStorage.getItem("selectedUsers")?.split(",") || [];
+    const dateRange = sessionStorage.getItem("date")?.split(",") || [];
+    
+    const timeRecords = await getTimeRecordsForExcel(taskIds, selectedUsers, dateRange);
+    
+    // Создаем данные для листа времени
+    const timeRecordsData = [];
+    
+    // Сортируем даты
+    const sortedDates = Object.keys(timeRecords).sort();
+    
+    sortedDates.forEach(date => {
+      const dateFormatted = moment(date).format('DD.MM.YYYY');
+      
+      // Добавляем строку с датой
+      timeRecordsData.push({
+        'Дата': dateFormatted,
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': '',
+        'Комментарий': ''
+      });
+      
+      // Добавляем записи для каждого пользователя в эту дату
+      const users = Object.keys(timeRecords[date]);
+      users.forEach(userName => {
+        const userRecords = timeRecords[date][userName];
+        
+        // Добавляем строку с пользователем
+        timeRecordsData.push({
+          'Дата': '',
+          'Пользователь': userName,
+          'Задача': '',
+          'Название задачи': '',
+          'Затрачено времени (часы)': '',
+          'Комментарий': ''
+        });
+        
+        // Добавляем записи времени для этого пользователя
+        userRecords.forEach(record => {
+          timeRecordsData.push({
+            'Дата': '',
+            'Пользователь': '',
+            'Задача': record.taskId,
+            'Название задачи': record.taskTitle,
+            'Затрачено времени (часы)': record.hours,
+            'Комментарий': record.comment
+          });
+        });
+        
+        // Добавляем итого для пользователя
+        const userTotal = userRecords.reduce((sum, record) => sum + record.hours, 0);
+        timeRecordsData.push({
+          'Дата': '',
+          'Пользователь': `Итого ${userName}:`,
+          'Задача': '',
+          'Название задачи': '',
+          'Затрачено времени (часы)': userTotal.toFixed(2),
+          'Комментарий': ''
+        });
+        
+        // Пустая строка для разделения
+        timeRecordsData.push({
+          'Дата': '',
+          'Пользователь': '',
+          'Задача': '',
+          'Название задачи': '',
+          'Затрачено времени (часы)': '',
+          'Комментарий': ''
+        });
+      });
+      
+      // Добавляем итого за день
+      const dayTotal = Object.values(timeRecords[date]).reduce((daySum, userRecords) => {
+        return daySum + userRecords.reduce((userSum, record) => userSum + record.hours, 0);
+      }, 0);
+      
+      timeRecordsData.push({
+        'Дата': `Итого за ${dateFormatted}:`,
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': dayTotal.toFixed(2),
+        'Комментарий': ''
+      });
+      
+      // Пустая строка между днями
+      timeRecordsData.push({
+        'Дата': '',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': '',
+        'Комментарий': ''
+      });
+    });
+
+    const timeWs = XLSX.utils.json_to_sheet(timeRecordsData);
+    
+    // Добавляем гиперссылки на задачи в листе времени
+    const timeRange = XLSX.utils.decode_range(timeWs['!ref']);
+    
+    for (let row = timeRange.s.r + 1; row <= timeRange.e.r; row++) {
+      const taskIdCell = XLSX.utils.encode_cell({ c: 2, r: row }); // Столбец C (Задача)
+      const titleCell = XLSX.utils.encode_cell({ c: 3, r: row }); // Столбец D (Название задачи)
+      
+      if (timeWs[taskIdCell] && timeWs[taskIdCell].v && !isNaN(timeWs[taskIdCell].v)) {
+        const taskId = timeWs[taskIdCell].v;
+        const url = `https://ortonica.bitrix24.ru/company/personal/user/${currentUser.value}/tasks/task/view/${taskId}/`;
+        
+        // Добавляем гиперссылку к ячейке с названием задачи
+        if (timeWs[titleCell]) {
+          if (!timeWs[titleCell].l) {
+            timeWs[titleCell].l = {};
+          }
+          timeWs[titleCell].l.Target = url;
+          timeWs[titleCell].l.Tooltip = 'Открыть задачу в Bitrix24';
+          
+          if (!timeWs[titleCell].s) {
+            timeWs[titleCell].s = {};
+          }
+          timeWs[titleCell].s.font = { color: { rgb: '0000FF' }, underline: true };
+        }
+      }
+    }
+    if (!timeWs['!cols']) timeWs['!cols'] = [];
+    timeWs['!cols'][2] = { hidden: true };
+    XLSX.utils.book_append_sheet(wb, timeWs, 'Записи времени');
+
+    XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
+    
+  } catch (error) {
+    console.error('Ошибка при экспорте задач в Excel:', error);
+    errorDisplay.value = 'Ошибка при экспорте задач в Excel';
+    errorDialog.value = true;
+  }
+};
+
+// Обновленная функция экспорта для отчета 3
+const exportTasksDetailedToExcel = async (data, fileName) => {
+  try {
+    const wb = XLSX.utils.book_new();
+    
+    // Основной лист с детализированными задачами
+    const excelData = data.map(item => ({
+      'Наименование': item.title,
+      'Статус': item.statusLabel,
+      'Постановщик': item.creatorFullName,
+      'Исполнитель': item.responsibleFullName,
+      'Время затрачено': item.timeSpentInLogs,
+      'Дата создания': item.createdDateFormatted,
+      'Дедлайн': item.deadlineFormatted,
+      'Приоритет': item.priorityLabel
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Добавляем гиперссылки на название задачи
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    
+    for (let row = range.s.r + 1; row <= range.e.r; row++) {
+      const cellAddress = XLSX.utils.encode_cell({ c: 0, r: row });
+      
+      if (ws[cellAddress]) {
+        const taskIndex = row - 1;
+        const taskId = data[taskIndex].id;
+        const url = `https://ortonica.bitrix24.ru/company/personal/user/${currentUser.value}/tasks/task/view/${taskId}/`;
+        
+        if (!ws[cellAddress].l) {
+          ws[cellAddress].l = {};
+        }
+        ws[cellAddress].l.Target = url;
+        ws[cellAddress].l.Tooltip = 'Открыть задачу в Bitrix24';
+        
+        if (!ws[cellAddress].s) {
+          ws[cellAddress].s = {};
+        }
+        ws[cellAddress].s.font = { color: { rgb: '0000FF' }, underline: true };
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Отчет по задачам');
+
+    // Лист с записями времени для детализированного отчета
+    const taskIds = [...new Set(data.map(item => item.id))];
+    const selectedUsers = sessionStorage.getItem("selectedUsers")?.split(",") || [];
+    const dateRange = sessionStorage.getItem("date")?.split(",") || [];
+    
+    const timeRecords = await getTimeRecordsForExcel(taskIds, selectedUsers, dateRange);
+    
+    // Создаем данные для листа времени
+    const timeRecordsData = [];
+    
+    // Сортируем даты
+    const sortedDates = Object.keys(timeRecords).sort();
+    
+    sortedDates.forEach(date => {
+      const dateFormatted = moment(date).format('DD.MM.YYYY');
+      
+      // Добавляем строку с датой
+      timeRecordsData.push({
+        'Дата': dateFormatted,
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': '',
+        'Комментарий': ''
+      });
+      
+      // Добавляем записи для каждого пользователя в эту дату
+      const users = Object.keys(timeRecords[date]);
+      users.forEach(userName => {
+        const userRecords = timeRecords[date][userName];
+        
+        // Добавляем строку с пользователем
+        timeRecordsData.push({
+          'Дата': '',
+          'Пользователь': userName,
+          'Задача': '',
+          'Название задачи': '',
+          'Затрачено времени (часы)': '',
+          'Комментарий': ''
+        });
+        
+        // Добавляем записи времени для этого пользователя
+        userRecords.forEach(record => {
+          timeRecordsData.push({
+            'Дата': '',
+            'Пользователь': '',
+            'Задача': record.taskId,
+            'Название задачи': record.taskTitle,
+            'Затрачено времени (часы)': record.hours,
+            'Комментарий': record.comment
+          });
+        });
+        
+        // Добавляем итого для пользователя
+        const userTotal = userRecords.reduce((sum, record) => sum + record.hours, 0);
+        timeRecordsData.push({
+          'Дата': '',
+          'Пользователь': `Итого ${userName}:`,
+          'Задача': '',
+          'Название задачи': '',
+          'Затрачено времени (часы)': userTotal.toFixed(2),
+          'Комментарий': ''
+        });
+        
+        // Пустая строка для разделения
+        timeRecordsData.push({
+          'Дата': '',
+          'Пользователь': '',
+          'Задача': '',
+          'Название задачи': '',
+          'Затрачено времени (часы)': '',
+          'Комментарий': ''
+        });
+      });
+      
+      // Добавляем итого за день
+      const dayTotal = Object.values(timeRecords[date]).reduce((daySum, userRecords) => {
+        return daySum + userRecords.reduce((userSum, record) => userSum + record.hours, 0);
+      }, 0);
+      
+      timeRecordsData.push({
+        'Дата': `Итого за ${dateFormatted}:`,
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': dayTotal.toFixed(2),
+        'Комментарий': ''
+      });
+      
+      // Пустая строка между днями
+      timeRecordsData.push({
+        'Дата': '',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': '',
+        'Комментарий': ''
+      });
+    });
+
+    const timeWs = XLSX.utils.json_to_sheet(timeRecordsData);
+    
+    // Добавляем гиперссылки на задачи в листе времени
+    const timeRange = XLSX.utils.decode_range(timeWs['!ref']);
+    
+    for (let row = timeRange.s.r + 1; row <= timeRange.e.r; row++) {
+      const taskIdCell = XLSX.utils.encode_cell({ c: 2, r: row }); // Столбец C (Задача)
+      const titleCell = XLSX.utils.encode_cell({ c: 3, r: row }); // Столбец D (Название задачи)
+      
+      if (timeWs[taskIdCell] && timeWs[taskIdCell].v && !isNaN(timeWs[taskIdCell].v)) {
+        const taskId = timeWs[taskIdCell].v;
+        const url = `https://ortonica.bitrix24.ru/company/personal/user/${currentUser.value}/tasks/task/view/${taskId}/`;
+        
+        // Добавляем гиперссылку к ячейке с названием задачи
+        if (timeWs[titleCell]) {
+          if (!timeWs[titleCell].l) {
+            timeWs[titleCell].l = {};
+          }
+          timeWs[titleCell].l.Target = url;
+          timeWs[titleCell].l.Tooltip = 'Открыть задачу в Bitrix24';
+          
+          if (!timeWs[titleCell].s) {
+            timeWs[titleCell].s = {};
+          }
+          timeWs[titleCell].s.font = { color: { rgb: '0000FF' }, underline: true };
+        }
+      }
+    }
+    if (!timeWs['!cols']) timeWs['!cols'] = [];
+    timeWs['!cols'][2] = { hidden: true };
+    XLSX.utils.book_append_sheet(wb, timeWs, 'Записи времени');
+
+    XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
+    
+  } catch (error) {
+    console.error('Ошибка при экспорте детализированных задач в Excel:', error);
+    errorDisplay.value = 'Ошибка при экспорте детализированных задач в Excel';
+    errorDialog.value = true;
+  }
+};
+
 const closeAllDialogs = () => {
   report1Dialog.value = false;
   report2Dialog.value = false;
   report3Dialog.value = false;
   reportsDialog.value = false;
 };
-// Функция для фокусировки на таблице при открытии диалога
+
 watch(report1Dialog, (newVal) => {
   if (newVal) {
     nextTick(() => {
