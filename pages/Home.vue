@@ -2061,7 +2061,8 @@ const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
         seconds: parseInt(item.SECONDS),
         hours: hours,
         comment: item.COMMENT_TEXT || '',
-        date: item.CREATED_DATE
+        date: item.CREATED_DATE,
+        createdDate: item.CREATED_DATE // Сохраняем исходную дату создания записи
       });
     });
 
@@ -2124,18 +2125,22 @@ const exportTasksToExcel = async (data, fileName) => {
     
     const timeRecords = await getTimeRecordsForExcel(taskIds, selectedUsers, dateRange);
     
-    // Создаем данные для листа времени
+    // Создаем данные для листа времени с датой создания записи и итогами
     const timeRecordsData = [];
-    
     // Сортируем даты
     const sortedDates = Object.keys(timeRecords).sort();
     
+    // Общие переменные для подсчета итогов
+    let grandTotalHours = 0;
+    
     sortedDates.forEach(date => {
       const dateFormatted = moment(date).format('DD.MM.YYYY');
+      let dayTotalHours = 0;
+      let dayRecordCount = 0;
       
-      // Добавляем строку с датой
+      // Добавляем заголовок дня
       timeRecordsData.push({
-        'Дата': dateFormatted,
+        'Дата создания записи': `День: ${dateFormatted}`,
         'Пользователь': '',
         'Задача': '',
         'Название задачи': '',
@@ -2143,79 +2148,111 @@ const exportTasksToExcel = async (data, fileName) => {
         'Комментарий': ''
       });
       
-      // Добавляем записи для каждого пользователя в эту дату
       const users = Object.keys(timeRecords[date]);
       users.forEach(userName => {
         const userRecords = timeRecords[date][userName];
-        
-        // Добавляем строку с пользователем
-        timeRecordsData.push({
-          'Дата': '',
-          'Пользователь': userName,
-          'Задача': '',
-          'Название задачи': '',
-          'Затрачено времени (часы)': '',
-          'Комментарий': ''
-        });
+        let userTotalHours = 0;
         
         // Добавляем записи времени для этого пользователя
         userRecords.forEach(record => {
           timeRecordsData.push({
-            'Дата': '',
-            'Пользователь': '',
+            'Дата создания записи': record.createdDate ? moment(record.createdDate).format('DD.MM.YYYY HH:mm:ss') : 'Не указана',
+            'Пользователь': userName,
             'Задача': record.taskId,
             'Название задачи': record.taskTitle,
             'Затрачено времени (часы)': record.hours,
             'Комментарий': record.comment
           });
+          
+          userTotalHours += record.hours;
+          dayTotalHours += record.hours;
+          dayRecordCount++;
+          grandTotalHours += record.hours;
         });
         
-        // Добавляем итого для пользователя
-        const userTotal = userRecords.reduce((sum, record) => sum + record.hours, 0);
+        // Добавляем итоги по пользователю за день
+        if (userRecords.length > 0) {
+          timeRecordsData.push({
+            'Дата создания записи': '',
+            'Пользователь': `Итого ${userName}:`,
+            'Задача': '',
+            'Название задачи': '',
+            'Затрачено времени (часы)': userTotalHours.toFixed(2),
+            'Комментарий': `${userRecords.length} записей`
+          });
+          
+          // Пустая строка для разделения
+          timeRecordsData.push({
+            'Дата создания записи': '',
+            'Пользователь': '',
+            'Задача': '',
+            'Название задачи': '',
+            'Затрачено времени (часы)': '',
+            'Комментарий': ''
+          });
+        }
+      });
+      
+      // Добавляем итоги за день
+      if (dayRecordCount > 0) {
         timeRecordsData.push({
-          'Дата': '',
-          'Пользователь': `Итого ${userName}:`,
+          'Дата создания записи': '',
+          'Пользователь': `ВСЕГО за ${dateFormatted}:`,
           'Задача': '',
           'Название задачи': '',
-          'Затрачено времени (часы)': userTotal.toFixed(2),
-          'Комментарий': ''
+          'Затрачено времени (часы)': dayTotalHours.toFixed(2),
+          'Комментарий': `${dayRecordCount} записей, ${users.length} пользователей`
         });
         
-        // Пустая строка для разделения
+        // Пустая строка между днями
         timeRecordsData.push({
-          'Дата': '',
+          'Дата создания записи': '',
           'Пользователь': '',
           'Задача': '',
           'Название задачи': '',
           'Затрачено времени (часы)': '',
           'Комментарий': ''
         });
-      });
-      
-      // Добавляем итого за день
-      const dayTotal = Object.values(timeRecords[date]).reduce((daySum, userRecords) => {
-        return daySum + userRecords.reduce((userSum, record) => userSum + record.hours, 0);
-      }, 0);
-      
+        timeRecordsData.push({
+          'Дата создания записи': '',
+          'Пользователь': '',
+          'Задача': '',
+          'Название задачи': '',
+          'Затрачено времени (часы)': '',
+          'Комментарий': ''
+        });
+      }
+    });
+    
+    // Добавляем общие итоги
+    if (grandTotalHours > 0) {
       timeRecordsData.push({
-        'Дата': `Итого за ${dateFormatted}:`,
-        'Пользователь': '',
-        'Задача': '',
-        'Название задачи': '',
-        'Затрачено времени (часы)': dayTotal.toFixed(2),
-        'Комментарий': ''
-      });
-      
-      // Пустая строка между днями
-      timeRecordsData.push({
-        'Дата': '',
+        'Дата создания записи': 'ОБЩИЕ ИТОГИ',
         'Пользователь': '',
         'Задача': '',
         'Название задачи': '',
         'Затрачено времени (часы)': '',
         'Комментарий': ''
       });
-    });
+      
+      timeRecordsData.push({
+        'Дата создания записи': 'Общее время:',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': grandTotalHours.toFixed(2),
+        'Комментарий': 'часов'
+      });
+      
+      timeRecordsData.push({
+        'Дата создания записи': 'Количество дней:',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': sortedDates.length,
+        'Комментарий': 'дней'
+      });
+    }
 
     const timeWs = XLSX.utils.json_to_sheet(timeRecordsData);
     
@@ -2245,8 +2282,7 @@ const exportTasksToExcel = async (data, fileName) => {
         }
       }
     }
-    if (!timeWs['!cols']) timeWs['!cols'] = [];
-    timeWs['!cols'][2] = { hidden: true };
+
     XLSX.utils.book_append_sheet(wb, timeWs, 'Записи времени');
 
     XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
@@ -2310,18 +2346,25 @@ const exportTasksDetailedToExcel = async (data, fileName) => {
     
     const timeRecords = await getTimeRecordsForExcel(taskIds, selectedUsers, dateRange);
     
-    // Создаем данные для листа времени
+    // Создаем данные для листа времени с датой создания записи и итогами
     const timeRecordsData = [];
-    
     // Сортируем даты
     const sortedDates = Object.keys(timeRecords).sort();
     
+    // Общие переменные для подсчета итогов
+    let grandTotalHours = 0;
+    let grandTotalRecords = 0;
+    let grandTotalUsers = new Set();
+    
     sortedDates.forEach(date => {
       const dateFormatted = moment(date).format('DD.MM.YYYY');
+      let dayTotalHours = 0;
+      let dayRecordCount = 0;
+      let dayUsers = new Set();
       
-      // Добавляем строку с датой
+      // Добавляем заголовок дня
       timeRecordsData.push({
-        'Дата': dateFormatted,
+        'Дата создания записи': `День: ${dateFormatted}`,
         'Пользователь': '',
         'Задача': '',
         'Название задачи': '',
@@ -2329,79 +2372,142 @@ const exportTasksDetailedToExcel = async (data, fileName) => {
         'Комментарий': ''
       });
       
-      // Добавляем записи для каждого пользователя в эту дату
       const users = Object.keys(timeRecords[date]);
       users.forEach(userName => {
         const userRecords = timeRecords[date][userName];
-        
-        // Добавляем строку с пользователем
-        timeRecordsData.push({
-          'Дата': '',
-          'Пользователь': userName,
-          'Задача': '',
-          'Название задачи': '',
-          'Затрачено времени (часы)': '',
-          'Комментарий': ''
-        });
+        let userTotalHours = 0;
         
         // Добавляем записи времени для этого пользователя
         userRecords.forEach(record => {
           timeRecordsData.push({
-            'Дата': '',
-            'Пользователь': '',
+            'Дата создания записи': record.createdDate ? moment(record.createdDate).format('DD.MM.YYYY HH:mm:ss') : 'Не указана',
+            'Пользователь': userName,
             'Задача': record.taskId,
             'Название задачи': record.taskTitle,
             'Затрачено времени (часы)': record.hours,
             'Комментарий': record.comment
           });
+          
+          userTotalHours += record.hours;
+          dayTotalHours += record.hours;
+          dayRecordCount++;
+          dayUsers.add(userName);
+          
+          grandTotalHours += record.hours;
+          grandTotalRecords++;
+          grandTotalUsers.add(userName);
         });
         
-        // Добавляем итого для пользователя
-        const userTotal = userRecords.reduce((sum, record) => sum + record.hours, 0);
+        // Добавляем итоги по пользователю за день
+        if (userRecords.length > 0) {
+          timeRecordsData.push({
+            'Дата создания записи': '',
+            'Пользователь': `Итого ${userName}:`,
+            'Задача': '',
+            'Название задачи': '',
+            'Затрачено времени (часы)': userTotalHours.toFixed(2),
+            'Комментарий': `${userRecords.length} записей`
+          });
+          
+          // Пустая строка для разделения
+          timeRecordsData.push({
+            'Дата создания записи': '',
+            'Пользователь': '',
+            'Задача': '',
+            'Название задачи': '',
+            'Затрачено времени (часы)': '',
+            'Комментарий': ''
+          });
+        }
+      });
+      
+      // Добавляем итоги за день
+      if (dayRecordCount > 0) {
         timeRecordsData.push({
-          'Дата': '',
-          'Пользователь': `Итого ${userName}:`,
+          'Дата создания записи': '',
+          'Пользователь': `ВСЕГО за ${dateFormatted}:`,
           'Задача': '',
           'Название задачи': '',
-          'Затрачено времени (часы)': userTotal.toFixed(2),
-          'Комментарий': ''
+          'Затрачено времени (часы)': dayTotalHours.toFixed(2),
+          'Комментарий': `${dayRecordCount} записей, ${dayUsers.size} пользователей`
         });
         
-        // Пустая строка для разделения
+        // Пустая строка между днями
         timeRecordsData.push({
-          'Дата': '',
+          'Дата создания записи': '',
           'Пользователь': '',
           'Задача': '',
           'Название задачи': '',
           'Затрачено времени (часы)': '',
           'Комментарий': ''
         });
-      });
-      
-      // Добавляем итого за день
-      const dayTotal = Object.values(timeRecords[date]).reduce((daySum, userRecords) => {
-        return daySum + userRecords.reduce((userSum, record) => userSum + record.hours, 0);
-      }, 0);
-      
+        timeRecordsData.push({
+          'Дата создания записи': '',
+          'Пользователь': '',
+          'Задача': '',
+          'Название задачи': '',
+          'Затрачено времени (часы)': '',
+          'Комментарий': ''
+        });
+      }
+    });
+    
+    // Добавляем общие итоги
+    if (grandTotalHours > 0) {
       timeRecordsData.push({
-        'Дата': `Итого за ${dateFormatted}:`,
-        'Пользователь': '',
-        'Задача': '',
-        'Название задачи': '',
-        'Затрачено времени (часы)': dayTotal.toFixed(2),
-        'Комментарий': ''
-      });
-      
-      // Пустая строка между днями
-      timeRecordsData.push({
-        'Дата': '',
+        'Дата создания записи': 'ОБЩИЕ ИТОГИ ЗА ПЕРИОД',
         'Пользователь': '',
         'Задача': '',
         'Название задачи': '',
         'Затрачено времени (часы)': '',
         'Комментарий': ''
       });
-    });
+      
+      timeRecordsData.push({
+        'Дата создания записи': 'Общее время:',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': grandTotalHours.toFixed(2),
+        'Комментарий': 'часов'
+      });
+      
+      timeRecordsData.push({
+        'Дата создания записи': 'Количество записей:',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': grandTotalRecords,
+        'Комментарий': 'записей'
+      });
+      
+      timeRecordsData.push({
+        'Дата создания записи': 'Количество пользователей:',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': grandTotalUsers.size,
+        'Комментарий': 'пользователей'
+      });
+      
+      timeRecordsData.push({
+        'Дата создания записи': 'Количество дней:',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': sortedDates.length,
+        'Комментарий': 'дней'
+      });
+      
+      timeRecordsData.push({
+        'Дата создания записи': 'Среднее в день:',
+        'Пользователь': '',
+        'Задача': '',
+        'Название задачи': '',
+        'Затрачено времени (часы)': (grandTotalHours / sortedDates.length).toFixed(2),
+        'Комментарий': 'часов/день'
+      });
+    }
 
     const timeWs = XLSX.utils.json_to_sheet(timeRecordsData);
     
@@ -2431,8 +2537,7 @@ const exportTasksDetailedToExcel = async (data, fileName) => {
         }
       }
     }
-    if (!timeWs['!cols']) timeWs['!cols'] = [];
-    timeWs['!cols'][2] = { hidden: true };
+
     XLSX.utils.book_append_sheet(wb, timeWs, 'Записи времени');
 
     XLSX.writeFile(wb, `${fileName}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
