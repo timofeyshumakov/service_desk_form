@@ -698,7 +698,6 @@ const getInvoiceTasksTime = async (invoicesData) => {
       ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE"], 
       ''
     );
-    console.log("Получено записей времени для задач заявок:", elapsedItems.length);
 
     // Создаем маппинг исполнителей заявок
     const invoiceResponsibleMap = {};
@@ -745,7 +744,6 @@ const getInvoiceTasksTime = async (invoicesData) => {
       }
     });
   }
-    console.log("Рассчитано время для задач:", Object.keys(taskTimeMap).length);
 
     return taskTimeMap;
   } catch (error) {
@@ -890,82 +888,68 @@ const categoryOptions = ref({
     '[ИТ]: Телефония',
   ],
 });
+const subcategoryOptions = ref({});
 
-const subcategoryOptions = ref({
-  'Рабочее место': [
-    'Перемещение и переподключение',
-    'Требуется помощь',
-    'Установка/удаление программного обеспечения',
-    'Подключение и настройка периферийных устройств',
-    'Комплексная подготовка согласно чек листу',
-    'Провести оценку технического состояния оборудования',
-    'Не работает периферийное устройство (мышь/клавиатура)',
-    'Ошибки в работе программного обеспечения',
-    'ПК или ноутбук не включается, перезагружается, медленно работает',
-    'Установка и настройка оборудования',
-    'Создание учетных записей',
-  ],
-  'Печать': [
-    'Подключить к принтеру / МФУ',
-    'Предоставить запасной картридж',
-    'Принтер/МФУ не печатает',
-    'Принтер/МФУ печатает с дефектами',
-    'Сканер не включается или работает с ошибками',
-    'Устранение замятия бумаги на принтере/МФУ',
-  ],
-  'Электронная почта': [
-    'Настройка переадресации почты',
-    'Настройка почтовой программы',
-    'Письма не принимаются или не отправляются',
-    'Не удается авторизоваться',
-  ],
-  'Видеоконференцсвязь. Корпоративные чаты и мессенджеры': [
-    'Установка и настройка',
-    'Ошибки при работе',
-  ],
-  'Специализированное складское и торговое оборудование': [
-    'Настройка оборудования (тсд, сканеры шк, кассы...)',
-    'Не работает оборудование',
-  ],
-  'Удаленный рабочий стол RDP': [
-    'Консультации по работе и настройка',
-    'Ошибки при работе',
-    'Ошибки при работе (более 5 человек)',
-  ],
-  'Система контроля и управления доступом': [
-    'Предоставление прав к сетевым дискам',
-    'Предоставление прав и видеонаблюдение',
-    'Регистрация на эл. площадках',
-    'Тех. поддержка соисполнителей',
-    'Удаленное подключение к сети компании (VPN)',
-    'Система контроля и управления доступом (СКУД)',
-  ],
-  'Локальная сеть (ЛВС)': [
-    'Монтаж ЛВС и WiFi точек',
-    'Поддержание и продление доменных имен в сети Интернет',
-    'Сбои в ЛВС/WiFi',
-  ],
-  'IT инфраструктура': [
-    'Изменение мониторинга',
-    'Создание виртуальной машины/изменение ресурсов',
-    'Резервная копия информационного ресурса',
-    'Восстановление информационного ресурса из резервной копии',
-  ],
-  'Электронная цифровая подпись и МЧД': [
-    'Выпуск ЭЦП',
-    'Выпуск МЧД',
-    'Проблемы с ЭЦП и МЧД',
-  ],
-  'Телефония': [
-    'Подготовка и настройка телефона',
-    'Заказ сим-карт',
-    'Настройка маршрутов обзвона',
-    'Настройка прав для входа в личный кабинет и прослушивания звонков',
-    'Не могут дозвониться',
-    'Не работает телефон',
-    'Недостаточно средств',
-  ],
-});
+// Функция для загрузки и преобразования данных подкатегорий
+const loadSubcategoryOptions = async () => {
+  try {
+    const fieldsData = await callApi("crm.item.fields", {}, [], 172);
+    const subcategoryField = fieldsData.fields.ufCrm47_1752752059810;
+    
+    if (!subcategoryField || !subcategoryField.items) {
+      console.error('Поле подкатегорий не найдено или не содержит items');
+      return;
+    }
+
+    const transformedOptions = {};
+    let currentCategory = null;
+    let currentOptions = [];
+
+    subcategoryField.items.forEach(item => {
+      const value = item.VALUE;
+      
+      // Проверяем, является ли значение категорией (содержит === ---)
+      if (value.includes('=== ---')) {
+        // Если у нас есть предыдущая категория, сохраняем её
+        if (currentCategory && currentOptions.length > 0) {
+          transformedOptions[currentCategory] = [...currentOptions];
+        }
+        
+        // Извлекаем название категории
+        currentCategory = value
+          .replace(/=== ---/g, '')
+          .replace(/--- ===/g, '')
+          .trim();
+        
+        // Очищаем массив для новой категории
+        currentOptions = [];
+      } else if (currentCategory) {
+        // Добавляем опцию к текущей категории
+        currentOptions.push(value);
+      }
+    });
+
+    // Добавляем последнюю категорию
+    if (currentCategory && currentOptions.length > 0) {
+      transformedOptions[currentCategory] = currentOptions;
+    }
+
+    subcategoryOptions.value = transformedOptions;
+    
+  } catch (error) {
+    console.error('Ошибка при загрузке подкатегорий:', error);
+    // Можно установить значения по умолчанию в случае ошибки
+    subcategoryOptions.value = {
+      'Рабочее место': [
+        'Перемещение и переподключение',
+        'Требуется помощь',
+        'Установка/удаление программного обеспечения',
+        // ... остальные значения по умолчанию
+      ],
+      // ... другие категории по умолчанию
+    };
+  }
+};
 
 const isValid = computed(() => {
   if(form.value.direction === "1С" && urgency.value && importance.value){
@@ -1218,7 +1202,8 @@ onMounted(async() => {
   try {
     await Promise.all([
       loadInvoiceUsers(),
-      loadTaskUsers()
+      loadTaskUsers(),
+      loadSubcategoryOptions(),
     ]);
 await new Promise((resolve) => {
 BX24.callMethod(
@@ -1611,8 +1596,7 @@ const handleDetailedTasksData = async (tasks) => {
     
     // Получаем все записи о затраченном времени
     const filteredDate = sessionStorage.getItem("date")?.split(",") || [];
-    console.log("Фильтр даты:", filteredDate);
-    
+
     // Создаем фильтр для временных записей
     const timeFilter = {};
     if (filteredDate.length >= 2) {
@@ -1623,7 +1607,6 @@ const handleDetailedTasksData = async (tasks) => {
       timeFilter['>=CREATED_DATE'] = "2025-08-01";
       timeFilter['<=CREATED_DATE'] = "2025-09-01";
     }
-console.log(sessionStorage.getItem("selectedUsers"));
 
     const elapsedItems = await getTaskElapsedItems(
       {'>=CREATED_DATE': filteredDate[0].split("T")[0], '<=CREATED_DATE': filteredDate[1].split("T")[0], "USER_ID": sessionStorage.getItem("selectedUsers").split(",")},
@@ -1631,11 +1614,8 @@ console.log(sessionStorage.getItem("selectedUsers"));
       ''
     );
 
-    console.log("Получено записей времени:", elapsedItems.length);
-
     // Получаем ID пользователей из taskUsers для фильтрации
     const taskUserIds = invoiceUsers.value.map(user => user.ID.toString());
-    console.log("Пользователи для учета:", taskUserIds);
     // Группируем записи времени по задачам и пользователям (только для taskUsers)
     const taskTimeByUser = {};
     const taskUserRecords = {}; // Для отслеживания пользователей, работавших над задачами
@@ -1663,11 +1643,8 @@ console.log(sessionStorage.getItem("selectedUsers"));
       taskUserRecords[taskId].add(userId);
     });
 
-    console.log("Задачи с временем:", Object.keys(taskTimeByUser).length);
-
     // Получаем детальную информацию о задачах
     const uniqueTaskIds = [...new Set(elapsedItems.map(item => item.TASK_ID))];
-    console.log("Уникальных задач:", uniqueTaskIds.length);
 
     let tasksDetailedData = [];
     
@@ -1687,8 +1664,6 @@ console.log(sessionStorage.getItem("selectedUsers"));
         tasksDetailedData = tasksDetailedData.tasks || [];
       }
     }
-
-    console.log("Получено детальных данных задач:", tasksDetailedData.length);
 
     // Создаем массив для хранения финальных данных с дублированием задач по пользователям
     const detailedTasksWithUsers = [];
@@ -1776,8 +1751,6 @@ console.log(sessionStorage.getItem("selectedUsers"));
 
     // Сортируем задачи по ID для удобства просмотра
     detailedTasksWithUsers.sort((a, b) => a.id - b.id);
-
-    console.log("Финальный набор данных:", detailedTasksWithUsers.length, "записей");
 
     // Обновляем данные таблицы
     tasksDetailedTableDate.value = detailedTasksWithUsers;
@@ -1915,8 +1888,7 @@ const handleTasksData = async (tasks) => {
     
     // Получаем период из фильтра
     const filteredDate = sessionStorage.getItem("date")?.split(",") || [];
-    console.log("Фильтр даты для второго отчета:", filteredDate);
-    
+
     // Создаем фильтр для временных записей за период
     const timeFilter = {};
     if (filteredDate.length >= 2) {
@@ -1934,16 +1906,12 @@ const handleTasksData = async (tasks) => {
       timeFilter["USER_ID"] = selectedUsers;
     }
 
-    console.log("Фильтр для временных записей:", timeFilter);
-
     // 1. Сначала получаем все записи о затраченном времени за период
     const elapsedItems = await getTaskElapsedItems(
       timeFilter,
       ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE"], 
       ''
     );
-
-    console.log("Найдено записей времени за период:", elapsedItems.length);
 
     if (elapsedItems.length === 0) {
       tasksTableDate.value = [];
@@ -1953,7 +1921,6 @@ const handleTasksData = async (tasks) => {
 
     // 2. Извлекаем уникальные ID задач из записей времени
     const uniqueTaskIds = [...new Set(elapsedItems.map(item => item.TASK_ID))];
-    console.log("Уникальных задач за период:", uniqueTaskIds.length);
 
     // 3. Получаем детальную информацию о задачах по найденным ID
     let tasksDetailedData = [];
@@ -1985,8 +1952,6 @@ const handleTasksData = async (tasks) => {
         }
       }
     //}
-
-    console.log("Получено детальных данных задач:", tasksDetailedData.length);
 
     // 4. Группируем записи времени по задачам и пользователям
     const taskTimeByUser = {};
@@ -2086,8 +2051,6 @@ const handleTasksData = async (tasks) => {
 
     // Сортируем задачи по ID для удобства просмотра
     finalTasksData.sort((a, b) => a.id - b.id);
-
-    console.log("Финальный набор данных для второго отчета:", finalTasksData.length, "записей");
 
     // Обновляем данные таблицы
     tasksTableDate.value = finalTasksData;
