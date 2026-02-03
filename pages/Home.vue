@@ -347,7 +347,7 @@
         </div>
       </v-card-title>
       <v-card-text class="pa-6 text-center">
-        <TheForm @update-task-data="handleFilteredTasksData" @updateTaskData="handleTasksData" :users="taskUsers" reportType="tasks"></TheForm>
+        <TheForm @update-task-data="handleFilteredTasksData" @updateTaskData="handleTasksData" :users="taskUsers" reportType="tasks" :user-exclusions="defaultExcludedUsers"></TheForm>
 <div v-if="tasksLoading" class="table-loading">
           <v-progress-circular indeterminate color="primary"></v-progress-circular>
           <span>Загрузка данных...</span>
@@ -1231,7 +1231,7 @@ const loadTaskUsers = async () => {
   try {
     const usersData = await callApi(
       "user.get",
-      { "ID": [13063, 489, 9735, 9731, 320] },
+      { "ID": [13063, 489, 9731, 320, 10051, 12031, 9097, 12181, 12603, 12993, 14087, 8951] },
       [],
       0,
       0,
@@ -1259,7 +1259,7 @@ const loadInvoiceUsers = async () => {
       BX24.callMethod(
         "user.get",
         {
-          "ID": [10051, 11307, 12031, 9989, 12603, 12181],
+          "ID": [10051, 11307, 12031, 12603, 12181],
         },
         function(result) {
           if (result.error()) {
