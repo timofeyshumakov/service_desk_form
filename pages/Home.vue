@@ -1359,11 +1359,16 @@ const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
 
     // Получаем названия задач
     let tasksData = [];
+    let tasksAdditionalData = [];
     if (taskIds.length > 0) {
       tasksData = await callApi(
         "tasks.task.list", 
         {"ID": taskIds},
-        ['id', 'title', 'status', 'createdDate', 'deadline', 'priority', 'responsibleId', 'createdBy', 'createdByName', 'createdByLastName', 'createdBySecondName', 'responsibleName', 'responsibleLastName', 'responsibleSecondName']
+        [            'id', 'title', 'description', 'status', 'responsibleId', 
+            'createdDate', 'deadline', 'priority', 'groupId', 
+            "timeSpentInLogs", "createdBy", "createdByName", "createdByLastName", 
+            "createdBySecondName", "responsibleName", "responsibleLastName", 
+            "responsibleSecondName"]
       );
 
       // Преобразуем структуру данных
@@ -1374,6 +1379,37 @@ const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
       } else {
         tasksData = tasksData.tasks || [];
       }
+      tasksAdditionalData = await callApi(
+        "tasks.task.list", 
+        {"ID": taskIds},
+        ['ID', "UF_AUTO_929760312277"]
+      );
+
+      // Преобразуем структуру данных
+      if (Array.isArray(tasksAdditionalData)) {
+        tasksAdditionalData = tasksAdditionalData.reduce((acc, current) => {
+          return acc.concat(current.tasks || []);
+        }, []);
+      } else {
+        tasksAdditionalData = tasksAdditionalData.tasks || [];
+      }
+      const additionalFieldsMap = {};
+      tasksAdditionalData.forEach(task => {
+        if (task && task.id) {
+          additionalFieldsMap[task.id] = {
+            ufAuto: task.ufAuto929760312277 || ''
+          };
+        }
+      });
+
+      // Объединяем данные: добавляем UF_AUTO_929760312277 к основной информации о задачах
+      tasksData = tasksData.map(task => {
+        const additionalData = additionalFieldsMap[task.id] || {};
+        return {
+          ...task,
+          UF_AUTO_929760312277: additionalData.ufAuto
+        };
+      });
     }
 
     // Создаем маппинг ID задачи -> полная информация о задаче
@@ -1392,7 +1428,8 @@ const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
         createdBySecondName: task.createdBySecondName,
         responsibleName: task.responsibleName,
         responsibleLastName: task.responsibleLastName,
-        responsibleSecondName: task.responsibleSecondName
+        responsibleSecondName: task.responsibleSecondName,
+        UF_AUTO_929760312277: task.UF_AUTO_929760312277,
       };
     });
 
@@ -1403,7 +1440,8 @@ const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
         status: 0,
         createdDate: null,
         deadline: null,
-        priority: 2
+        priority: 2,
+        UF_AUTO_929760312277: 'Не указано'
       };
       
       let user = taskUsers.value.find(u => u.ID.toString() === item.USER_ID.toString());
@@ -1438,7 +1476,7 @@ const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
         moment(taskInfo.createdDate).format('DD.MM.YYYY HH:mm') : 'Не указана';
       const taskDeadline = taskInfo.deadline ? 
         moment(taskInfo.deadline).format('DD.MM.YYYY HH:mm') : 'Не указан';
-      
+      console.log(taskInfo);
       return {
         recordCreatedDate: item.CREATED_DATE ? moment(item.CREATED_DATE).format('DD.MM.YYYY HH:mm:ss') : 'Не указана',
         userName: userName,
@@ -1453,7 +1491,8 @@ const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
         taskResponsible: responsibleFullName,
         taskCreatedDate: taskCreatedDate,
         taskDeadline: taskDeadline,
-        taskPriority: getPriorityLabel(taskInfo.priority)
+        taskPriority: getPriorityLabel(taskInfo.priority),
+        UF_AUTO_929760312277: taskInfo.UF_AUTO_929760312277,
       };
     });
 
@@ -1488,7 +1527,8 @@ const exportTasksToExcel = async (data, fileName) => {
       'Дата создания задачи': record.taskCreatedDate,
       'Дедлайн': record.taskDeadline,
       'Приоритет': record.taskPriority,
-      'Пользователь (запись)': record.userName
+      'Пользователь (запись)': record.userName,
+      'Тип обращения': record.UF_AUTO_929760312277 || '',
     }));
     
     const ws = XLSX.utils.json_to_sheet(excelData);
@@ -1934,11 +1974,11 @@ const handleTasksData = async (tasks) => {
           "tasks.task.list", 
           {"ID": uniqueTaskIds}, 
           [
-            'id', 'title', 'description', 'status', 'responsibleId', 
+                        'id', 'title', 'description', 'status', 'responsibleId', 
             'createdDate', 'deadline', 'priority', 'groupId', 
             "timeSpentInLogs", "createdBy", "createdByName", "createdByLastName", 
             "createdBySecondName", "responsibleName", "responsibleLastName", 
-            "responsibleSecondName"
+            "responsibleSecondName",
           ]
         );
 
@@ -1991,7 +2031,7 @@ const handleTasksData = async (tasks) => {
       Object.entries(timeRecords).forEach(([userId, totalSeconds]) => {
         // Находим пользователя
         const workingUser = taskUsers.value.find(user => user.ID.toString() === userId);
-        
+
         // Формируем полное имя постановщика
         const creatorFullName = task.createdByName ? 
           formatTaskUserName(
@@ -1999,7 +2039,7 @@ const handleTasksData = async (tasks) => {
             task.createdByName,
             task.createdBySecondName
           ) : 'Неизвестный постановщик';
-        
+
         // Формируем полное имя пользователя, который работал над задачей
         const workingUserName = workingUser ? 
           formatTaskUserName(
