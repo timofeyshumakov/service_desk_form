@@ -58,7 +58,7 @@
           variant="outlined"
           :rules="[v => !!v || 'Подробное описание обязательно']"
           rows="4"
-          :maxlength="250"
+          auto-grow
         ></v-textarea>
 
         <!-- Links -->
@@ -119,14 +119,16 @@
           multiple
         ></v-file-input>
 
-        <v-text-field
+        <v-textarea
           v-model="questions.errorText"
+          rows="2"
           label="2. Текст ошибки"
           variant="outlined"
           placeholder="Опишите текст ошибки"
           required
           :rules="[v => !!v || 'Текст ошибки обязателен']"
-        ></v-text-field>
+          auto-grow
+        ></v-textarea>
 
         <v-textarea
           v-model="questions.workaround"
@@ -136,6 +138,7 @@
           placeholder="Опишите временное решение, если есть"
           required
           :rules="[v => !!v || 'Обходной путь обязателен']"
+          auto-grow
         ></v-textarea>
       </template>
 
@@ -149,6 +152,7 @@
           placeholder="Как выполняется процесс сейчас?"
           required
           :rules="[v => !!v || 'Поле обязательно']"
+          auto-grow
         ></v-textarea>
 
         <v-textarea
@@ -159,6 +163,7 @@
           placeholder="Ожидаемый результат"
           required
           :rules="[v => !!v || 'Поле обязательно']"
+          auto-grow
         ></v-textarea>
 
         <v-textarea
@@ -169,6 +174,7 @@
           placeholder="Бизнес-цель, которая достигается"
           required
           :rules="[v => !!v || 'Поле обязательно']"
+          auto-grow
         ></v-textarea>
 
         <v-text-field
@@ -178,6 +184,7 @@
           placeholder="База 1С, раздел, документ, отчет"
           required
           :rules="[v => !!v || 'Поле обязательно']"
+          auto-grow
         ></v-text-field>
 
         <v-select
@@ -187,6 +194,7 @@
           variant="outlined"
           required
           :rules="[v => !!v || 'Поле обязательно']"
+          auto-grow
         ></v-select>
 
         <v-row>
@@ -208,6 +216,7 @@
               placeholder="Почему именно этот срок?"
               required
               :rules="[v => !!v || 'Поле обязательно']"
+              auto-grow
             ></v-text-field>
           </v-col>
         </v-row>
@@ -235,6 +244,7 @@
             placeholder="В чем ошибка?"
             required
             :rules="[v => !!v || 'Поле обязательно']"
+            auto-grow
           ></v-textarea>
 
           <v-textarea
@@ -245,6 +255,7 @@
             placeholder="База 1С, документ, отчет, период"
             required
             :rules="[v => !!v || 'Поле обязательно']"
+            auto-grow
           ></v-textarea>
 
           <v-text-field
@@ -254,6 +265,7 @@
             placeholder="Причина"
             required
             :rules="[v => !!v || 'Поле обязательно']"
+            auto-grow
           ></v-text-field>
 
           <v-textarea
@@ -263,6 +275,7 @@
             variant="outlined"
             required
             :rules="[v => !!v || 'Поле обязательно']"
+            auto-grow
           ></v-textarea>
         </template>
 
@@ -275,6 +288,7 @@
             placeholder="База 1С, раздел / документ"
             required
             :rules="[v => !!v || 'Поле обязательно']"
+            auto-grow
           ></v-text-field>
 
           <v-textarea
@@ -284,6 +298,7 @@
             variant="outlined"
             required
             :rules="[v => !!v || 'Поле обязательно']"
+            auto-grow
           ></v-textarea>
         </template>
       </template>
@@ -317,6 +332,7 @@
           placeholder="Опишите текст ошибки"
           required
           :rules="[v => !!v || 'Поле обязательно']"
+          auto-grow
         ></v-text-field>
 
         <v-textarea
@@ -327,6 +343,7 @@
           placeholder="Опишите временное решение, если есть"
           required
           :rules="[v => !!v || 'Поле обязательно']"
+          auto-grow
         ></v-textarea>
       </template>
 
