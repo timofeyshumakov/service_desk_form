@@ -54,10 +54,10 @@
 
         <v-textarea
           v-model="form.description"
-          label="Подробное описание"
+          label="Описание"
           required
           variant="outlined"
-          :rules="[v => !!v || 'Подробное описание обязательно']"
+          :rules="[v => !!v || 'Описание обязательно']"
           rows="4"
           auto-grow
           :error="touchedFields.description && !form.description"
@@ -324,49 +324,45 @@
 
       <!-- Блок для типа 4: "Нужен доступ" -->
       <template v-if="form.requestType === 'Нужен доступ'">
-        <v-radio-group
-          v-model="questions.workStopped"
-          label="1. Остановлена ли работа?"
-          required
-          :rules="[v => v !== null || 'Поле обязательно']"
-          inline
-          :error="touchedFields.workStopped && questions.workStopped === null"
-        >
-          <v-radio label="Да" :value="true"></v-radio>
-          <v-radio label="Нет" :value="false"></v-radio>
-        </v-radio-group>
-
-        <v-file-input
-          v-model="questions.errorScreenshot"
-          label="2. Скриншот ошибки"
-          accept="image/*"
-          variant="outlined"
-          prepend-icon="mdi-camera"
-          multiple
-        ></v-file-input>
-
         <v-text-field
-          v-model="questions.errorText"
-          label="2. Текст ошибки"
+          v-model="questions.accessRecipient"
+          label="1. Кому требуется доступ?"
+          placeholder="ФИО, должность"
           variant="outlined"
-          placeholder="Опишите текст ошибки"
           required
           :rules="[v => !!v || 'Поле обязательно']"
-          auto-grow
-          :error="touchedFields.errorText && !questions.errorText"
+          :error="touchedFields.accessRecipient && !questions.accessRecipient"
         ></v-text-field>
 
-        <v-textarea
-          v-model="questions.workaround"
-          label="3. Есть ли обходной путь?"
-          rows="3"
+        <v-text-field
+          v-model="questions.accessDatabase"
+          label="2. В какой базе 1С?"
+          placeholder="Наименование и путь к базе, если известно"
           variant="outlined"
-          placeholder="Опишите временное решение, если есть"
           required
           :rules="[v => !!v || 'Поле обязательно']"
-          auto-grow
-          :error="touchedFields.workaround && !questions.workaround"
-        ></v-textarea>
+          :error="touchedFields.accessDatabase && !questions.accessDatabase"
+        ></v-text-field>
+
+        <v-select
+          v-model="questions.accessLevel"
+          :items="accessLevelOptions"
+          label="3. Какой уровень доступа нужен?"
+          variant="outlined"
+          required
+          :rules="[v => !!v || 'Поле обязательно']"
+          :error="touchedFields.accessLevel && !questions.accessLevel"
+        ></v-select>
+
+        <v-text-field
+          v-model="questions.accessObjects"
+          label="4. К каким разделам/объектам?"
+          placeholder="Продажи, склад и т.п."
+          variant="outlined"
+          required
+          :rules="[v => !!v || 'Поле обязательно']"
+          :error="touchedFields.accessObjects && !questions.accessObjects"
+        ></v-text-field>
       </template>
 
 
@@ -405,7 +401,7 @@
       <div class="buttons">
         <v-btn v-if="step > 1" @click="step--">назад</v-btn>
         <v-btn color="primary" prepend-icon="mdi-play" @click="showVideo = true">Видеоинструкция</v-btn>
-        <v-btn v-if="step === 1" :color="buttonColor" @click="goNextStep">Продолжить</v-btn>
+        <v-btn v-if="step === 1" :color="buttonColor" @click="goNextStep">{{form.direction === "ИТ" ? 'создать заявку' : 'Продолжить'}}</v-btn>
         <v-btn v-if="step === 2"  :color="isValid ? 'success' : null" @click="completeStepper">создать заявку</v-btn>
       </div>
         </v-stepper>
@@ -863,27 +859,24 @@ const touchedFields = ref({
   correctResult: false,
   consultationLocation: false,
   alreadyTried: false,
+  accessRecipient: false,
+  accessDatabase: false,
+  accessLevel: false,
+  accessObjects: false,
 });
+
 const validateFirstStep = () => {
-  // Отмечаем все поля как "тронутые" для показа ошибок
   touchedFields.value.direction = true;
   
   if (form.value.direction === "1С") {
     touchedFields.value.requestType = true;
+    return !!form.value.requestType && !!form.value.description;
+  } else if (form.value.direction === "ИТ") {
     touchedFields.value.description = true;
+    return !!form.value.description;
   } else {
-    touchedFields.value.category = true;
+    return !!form.value.description;
   }
-  
-  // Проверяем, все ли обязательные поля заполнены
-  let isValid = false;
-  if (form.value.direction === "1С") {
-    isValid = !!form.value.requestType && !!form.value.description;
-  } else {
-    isValid = !!form.value.category;
-  }
-  
-  return isValid;
 };
 
 // Функция для проверки и подсветки полей на втором шаге
@@ -945,14 +938,19 @@ const validateSecondStep = () => {
     }
     
     else if (form.value.requestType === 'Нужен доступ') {
-      touchedFields.value.workStopped = true;
-      touchedFields.value.errorText = true;
-      touchedFields.value.workaround = true;
+      touchedFields.value.accessRecipient = true;
+      touchedFields.value.accessDatabase = true;
+      touchedFields.value.accessLevel = true;
+      touchedFields.value.accessObjects = true;
+
+      console.log(questions.value);
       
-      isValid = !!(questions.value.workStopped !== null && 
-                   questions.value.errorText && 
-                   questions.value.workaround);
+      isValid = !!(questions.value.accessRecipient && 
+                  questions.value.accessDatabase && 
+                  questions.value.accessLevel &&
+                  questions.value.accessObjects);
     }
+
   } else if (form.value.direction !== null && form.value.direction !== "1С") {
     isValid = true;
   }
@@ -984,31 +982,122 @@ const itemsTableHeaders = ref([
 ]);
 
 const buttonColor = computed(() => {
-  // Используем аналогичную логику, как в вычисленном свойстве `isNextStepAvailable`
-  let colorCondition;
-  if(form.value.direction === "1С") {
-    colorCondition = !!form.value.requestType && !!form.value.description;
+  if (form.value.direction === "1С") {
+    return !!form.value.requestType && !!form.value.description ? 'green' : 'gray';
+  } else if (form.value.direction === "ИТ") {
+    return !!form.value.description ? 'green' : 'gray';
   } else {
-    colorCondition = !!form.value.category;
+    return !!form.value.description ? 'green' : 'gray';
   }
-
-  return colorCondition ? 'green' : 'gray';
 });
 // Вычисляемое свойство для активности кнопки
 const isNextStepAvailable = computed(() => {
-  if(form.value.direction === "1С"){
+  if (form.value.direction === "1С") {
     return !!form.value.requestType && !!form.value.description;
-  }else{
-    return !!form.value.category;
+  } else if (form.value.direction === "ИТ") {
+    return !!form.value.description;
+  } else {
+    return !!form.value.description;
   }
 });
 
 // Метод перехода на следующий шаг
-const goNextStep = () => {
+const goNextStep = async () => {
   if (validateFirstStep()) {
-    step.value = 2;
+    if (form.value.direction === "ИТ") {
+      // Для ИТ создаем заявку сразу
+      await createItTicket();
+    } else {
+      // Для остальных направлений переходим на второй шаг
+      step.value = 2;
+    }
   }
 };
+const createItTicket = async () => {
+  isLoading.value = true;
+  let b64Files = [];
+  let itemId = 0;
+
+  if (form.value.files.length > 0) {
+    b64Files = b64Files.concat(await codeFiles(form.value.files));
+  }
+
+  // Формируем описание заявки
+  const descriptionText = [
+    form.value.description,
+    form.value.links.length > 0 ? `Ссылки: ${form.value.links.join(', ')}` : ''
+  ].filter(Boolean).join('\n\n');
+
+  const categoryId = 103; // ID для направления ИТ
+
+  try {
+    // Создаем заявку
+    await new Promise((resolve) => {
+      BX24.callMethod(
+        'crm.item.add', {
+          entityTypeId: 172,
+          fields: {
+            "categoryId": categoryId,
+            'ufCrm47_1706781047803': fields.value.ufCrm47_1706781047803.items.find(item => item.VALUE === form.value.direction).ID,
+            'ufCrm47_1698839766': descriptionText,
+            'ufCrm47_1698839820': b64Files,
+            'ufCrm47_1706781277387': form.value.links.join(', '),
+            'ufCrm47_1752822806': form.value.category ? fields.value.ufCrm47_1752822806.items.find(item => item.VALUE === form.value.category.replace("[ИТ]: ", "")).ID : null,
+            'ufCrm47_1752752059810': form.value.subcategory ? fields.value.ufCrm47_1752752059810.items.find(item => item.VALUE === form.value.subcategory).ID : null,
+            'ufCrm47_1770824397': `Направление: ${form.value.direction}\nОписание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`,
+          }
+        }, (res) => {
+          if (res.error()) {
+            console.error(res.error());
+            errorDisplay.value = res.error().description || 'Ошибка при создании заявки';
+            errorDialog.value = true;
+          } else {
+            itemId = res.data().item.id;
+          }
+          resolve();
+        }
+      );
+    });
+
+    if (itemId) {
+      // Добавляем комментарий в таймлайн
+      await new Promise((resolve) => {
+        BX24.callMethod(
+          "crm.timeline.comment.add",
+          {
+            fields: {
+              "ENTITY_ID": itemId,
+              "ENTITY_TYPE": "DYNAMIC_172",
+              "COMMENT": `Направление: ${form.value.direction}\nОписание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`,
+            }
+          }
+        );
+        resolve();
+      });
+
+      // Сбрасываем форму
+      form.value = {
+        direction: null,
+        requestType: null,
+        category: null,
+        subcategory: null,
+        description: '',
+        links: [],
+        files: [],
+      };
+      
+      newLink.value = '';
+      successDialog.value = true;
+    }
+  } catch (error) {
+    console.error('Ошибка при создании заявки для ИТ:', error);
+    errorDisplay.value = 'Ошибка при создании заявки';
+    errorDialog.value = true;
+  } finally {
+    isLoading.value = false;
+  }
+};
+
 // Добавляем состояния загрузки для таблиц
 const invoicesLoading = ref(false);
 const tasksLoading = ref(false);
@@ -1404,7 +1493,20 @@ const questions = ref({
   correctResult: '',
   consultationLocation: '',
   alreadyTried: '',
+
+// Для типа 4 (Нужен доступ) - новые поля
+  accessRecipient: '',
+  accessDatabase: '',
+  accessLevel: null,
+  accessObjects: '',
 });
+
+const accessLevelOptions = [
+  'Просмотр',
+  'Ввод',
+  'Проведение',
+  'Как у кого?'
+];
 
 // Опции для выбора критичности
 const criticalityOptions = [
@@ -1472,9 +1574,10 @@ const isValid = computed(() => {
     }
     
     if (form.value.requestType === 'Нужен доступ') {
-      return !!(questions.value.workStopped !== null && 
-               questions.value.errorText && 
-               questions.value.workaround);
+      return !!(questions.value.accessRecipient && 
+              questions.value.accessDatabase && 
+              questions.value.accessLevel &&
+              questions.value.accessObjects);
     }
     
     return false;
@@ -1505,13 +1608,21 @@ const subcategories = computed(() => {
 });
 
 const showContinueButton = ref(false);
-// Methods
+const isItDirection = ref(false);
+
+// Обновите метод onDirectionChange
 const onDirectionChange = () => {
   resetTouchedFields();
-  if(form.value.direction === "1С" && form.value.requestType){
+  
+  if (form.value.direction === "1С") {
     showContinueButton.value = true;
-  }else{
+    isItDirection.value = false;
+  } else if (form.value.direction === "ИТ") {
     showContinueButton.value = false;
+    isItDirection.value = true;
+  } else {
+    showContinueButton.value = false;
+    isItDirection.value = false;
   }
 
   form.value.requestType = null;
@@ -1664,11 +1775,10 @@ const completeStepper = async() => {
       }
       
       if (form.value.requestType === 'Нужен доступ') {
-        additionalQuestions.push(`Остановлена ли работа: ${questions.value.workStopped ? 'Да' : 'Нет'}`);
-        additionalQuestions.push(`Текст ошибки: ${questions.value.errorText}`);
-        if (questions.value.workaround) {
-          additionalQuestions.push(`Обходной путь: ${questions.value.workaround}`);
-        }
+        additionalQuestions.push(`Кому требуется доступ: ${questions.value.accessRecipient}`);
+        additionalQuestions.push(`База 1С: ${questions.value.accessDatabase}`);
+        additionalQuestions.push(`Уровень доступа: ${questions.value.accessLevel}`);
+        additionalQuestions.push(`Разделы/объекты: ${questions.value.accessObjects}`);
       }
     }
 
@@ -1710,7 +1820,7 @@ const completeStepper = async() => {
             "ufCrm47_1706781047803": form.value.direction ? fields.value.ufCrm47_1706781047803.items.find(item => item.VALUE === form.value.direction).ID : null,
             'ufCrm47_1698839820': b64Files,
             'ufCrm47_1751371044498': fields.value.ufCrm47_1751371044498.items[fields.value.ufCrm47_1772013890.items.findIndex(item => item.VALUE === form.value.requestType)].ID,
-            'ufCrm47_1706781202419': form.value.description,
+            'ufCrm47_1698839766': form.value.description,
             'ufCrm47_1772013890': form.value.requestType ? fields.value.ufCrm47_1772013890.items.find(item => item.VALUE === form.value.requestType).ID : null,
             'ufCrm47_1752218749933': importance.value ? fields.value.ufCrm47_1752218749933.items.find(item => item.VALUE === importance.value).ID : null,
             'ufCrm47_1752218774249': urgency.value ? fields.value.ufCrm47_1752218774249.items.find(item => item.VALUE === urgency.value).ID : null,
@@ -1750,6 +1860,10 @@ const completeStepper = async() => {
             correctResult: '',
             consultationLocation: '',
             alreadyTried: '',
+            accessRecipient: '',
+            accessDatabase: '',
+            accessLevel: null,
+            accessObjects: '',
           };
           
           step.value = 1;
