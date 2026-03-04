@@ -867,12 +867,12 @@ const touchedFields = ref({
 
 const validateFirstStep = () => {
   touchedFields.value.direction = true;
+  touchedFields.value.description = true;
   
   if (form.value.direction === "1С") {
     touchedFields.value.requestType = true;
     return !!form.value.requestType && !!form.value.description;
   } else if (form.value.direction === "ИТ") {
-    touchedFields.value.description = true;
     return !!form.value.description;
   } else {
     return !!form.value.description;
