@@ -33,16 +33,17 @@
           :rules="[v => !!v || 'Тип заявки обязателен']"
           :error="touchedFields.requestType && !form.requestType"
         ></v-autocomplete>
-        <!--
         <v-autocomplete
-          v-if="(form.direction === '1С' && form.requestType) || (form.direction !== '1С')"
+          v-if="form.direction === 'Б24'"
           v-model="form.category"
           :items="categories"
+          item-title="VALUE"
+          item-value="VALUE"
           label="Категория"
           @update:modelValue="onCategoryChange"
           required
           variant="outlined"
-        ></v-autocomplete>-->
+        ></v-autocomplete>
         <v-autocomplete
           v-if="(form.direction === 'ИТ' && subcategories.length > 0)"
           v-model="form.subcategory"
@@ -365,9 +366,7 @@
         ></v-text-field>
       </template>
 
-
-      <!-- Сообщение, если тип не выбран или не 1С -->
-      <template v-if="!form.requestType || form.direction !== '1С'">
+      <template v-if="!form.requestType">
         <v-card-text>
                       <v-text-field
                         v-model="project"
@@ -401,7 +400,7 @@
       <div class="buttons">
         <v-btn v-if="step > 1" @click="step--">назад</v-btn>
         <v-btn color="primary" prepend-icon="mdi-play" @click="showVideo = true">Видеоинструкция</v-btn>
-        <v-btn v-if="step === 1" :color="buttonColor" @click="goNextStep">{{form.direction === "ИТ" ? 'создать заявку' : 'Продолжить'}}</v-btn>
+        <v-btn v-if="step === 1" :color="buttonColor" @click="goNextStep">{{form.direction === "ИТ" || form.direction === "Б24" ? 'создать заявку' : 'Продолжить'}}</v-btn>
         <v-btn v-if="step === 2"  :color="isValid ? 'success' : null" @click="completeStepper">создать заявку</v-btn>
       </div>
         </v-stepper>
@@ -1004,7 +1003,7 @@ const isNextStepAvailable = computed(() => {
 // Метод перехода на следующий шаг
 const goNextStep = async () => {
   if (validateFirstStep()) {
-    if (form.value.direction === "ИТ") {
+    if (form.value.direction === "ИТ" || form.value.direction === "Б24") {
       // Для ИТ создаем заявку сразу
       await createItTicket();
     } else {
@@ -1028,7 +1027,7 @@ const createItTicket = async () => {
     form.value.links.length > 0 ? `Ссылки: ${form.value.links.join(', ')}` : ''
   ].filter(Boolean).join('\n\n');
 
-  const categoryId = 103; // ID для направления ИТ
+  const categoryId = form.value.direction === "ИТ" ? 103 : 105; // ID для направления ИТ
 
   try {
     // Создаем заявку
@@ -1042,9 +1041,9 @@ const createItTicket = async () => {
             'ufCrm47_1698839766': descriptionText,
             'ufCrm47_1698839820': b64Files,
             'ufCrm47_1706781277387': form.value.links.join(', '),
-            'ufCrm47_1752822806': form.value.category ? fields.value.ufCrm47_1752822806.items.find(item => item.VALUE === form.value.category.replace("[ИТ]: ", "")).ID : null,
+            '1752822542': form.value.category,
             'ufCrm47_1752752059810': form.value.subcategory ? fields.value.ufCrm47_1752752059810.items.find(item => item.VALUE === form.value.subcategory).ID : null,
-            'ufCrm47_1770824397': `Направление: ${form.value.direction}\nОписание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`,
+            'ufCrm47_1770824397': `Направление: ${form.value.direction}\n${form.value.direction === "Б24" ? `Категория: ${form.value.category}\n` : ''}Описание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`
           }
         }, (res) => {
           if (res.error()) {
@@ -1068,7 +1067,7 @@ const createItTicket = async () => {
             fields: {
               "ENTITY_ID": itemId,
               "ENTITY_TYPE": "DYNAMIC_172",
-              "COMMENT": `Направление: ${form.value.direction}\nОписание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`,
+              "COMMENT": `Направление: ${form.value.direction}\n${form.value.direction === "Б24" ? `Категория: ${form.value.category}\n` : ''}Описание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`,
             }
           }
         );
@@ -1413,8 +1412,8 @@ const loadSubcategoryOptions = async () => {
     fields.value = (await callApi("crm.item.fields", {}, [], 172)).fields;
     const subcategoryField = fields.value.ufCrm47_1752752059810;
     requestTypes.value = fields.value.ufCrm47_1772013890.items;
-    categories.value = fields.value.ufCrm47_1772013890.items;
-
+    categories.value = fields.value.ufCrm47_1752822542.items;
+    console.log(fields.value.ufCrm47_1752822542.items);
     if (!subcategoryField || !subcategoryField.items) {
       console.error('Поле подкатегорий не найдено или не содержит items');
       return;
@@ -1587,7 +1586,7 @@ const isValid = computed(() => {
     return false;
   }
 });
-
+/*
 // Computed properties
 const categories = computed(() => {
   if (form.value.direction === '1С' && form.value.requestType) {
@@ -1598,7 +1597,8 @@ const categories = computed(() => {
     return categoryOptions.value[form.value.direction] || [];
   }
 });
-
+*/
+const categories = ref([]);
 const subcategories = computed(() => {
   if(form.value.category){
       return subcategoryOptions.value[form.value.category.replace("[ИТ]: ", "")] || [];
