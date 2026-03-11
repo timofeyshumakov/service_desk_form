@@ -44,6 +44,14 @@
           required
           variant="outlined"
         ></v-autocomplete>
+        <v-combobox
+          v-if="(form.direction === 'ИТ')"
+          v-model="form.title"
+          label="Краткое описание / Тема"
+          required
+          variant="outlined"
+          auto-grow
+        ></v-combobox>
 
         <v-textarea
           v-model="form.description"
@@ -574,7 +582,7 @@
                 </template>
                 <template v-slot:item.title="{ item }">
                     <a 
-                        v-if="item.ufCrm_47_1701780020523" 
+                        v-if="item.ufCrm_47_1701780020523"
                         :href="`https://ortonica.bitrix24.ru/company/personal/user/${currentUser}/tasks/task/view/${item.ufCrm_47_1701780020523}/`" 
                         target="_blank" 
                         class="task-link"
@@ -833,6 +841,7 @@ const touchedFields = ref({
   requestType: false,
   description: false,
   category: false,
+  title: false,
   // Добавьте поля для дополнительных вопросов
   workStopped: false,
   errorText: false,
@@ -1031,12 +1040,13 @@ const createItTicket = async () => {
           fields: {
             "categoryId": categoryId,
             'ufCrm47_1706781047803': fields.value.ufCrm47_1706781047803.items.find(item => item.VALUE === form.value.direction).ID,
+            'ufCrm_47_1700466732': form.value.title,
             'ufCrm47_1698839766': descriptionText,
             'ufCrm47_1698839820': b64Files,
             'ufCrm47_1770827080317': form.value.links.join(', '), //1706781277387
             '1752822542': form.value.category,
             'ufCrm47_1752752059810': form.value.subcategory ? fields.value.ufCrm47_1752752059810.items.find(item => item.VALUE === form.value.subcategory).ID : null,
-            'ufCrm47_1770824397': `Направление: ${form.value.direction}\n${form.value.direction === "Б24" ? `Категория: ${form.value.category}\n` : ''}Описание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`
+            'ufCrm47_1770824397': `Направление: ${form.value.direction}\n${form.value.direction === "Б24" ? `Категория: ${form.value.category}\n` : ''}Тема: ${form.value.title}\nОписание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`
           }
         }, (res) => {
           if (res.error()) {
@@ -1060,7 +1070,7 @@ const createItTicket = async () => {
             fields: {
               "ENTITY_ID": itemId,
               "ENTITY_TYPE": "DYNAMIC_172",
-              "COMMENT": `Направление: ${form.value.direction}\n${form.value.direction === "Б24" ? `Категория: ${form.value.category}\n` : ''}Описание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`,
+              "COMMENT": `Направление: ${form.value.direction}\n${form.value.direction === "Б24" ? `Категория: ${form.value.category}\n` : ''}${form.value.title ? `Тема: ${form.value.title}\n` : ''}'}\nОписание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`,
             }
           }
         );
