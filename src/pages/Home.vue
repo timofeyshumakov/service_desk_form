@@ -44,14 +44,6 @@
           required
           variant="outlined"
         ></v-autocomplete>
-        <v-autocomplete
-          v-if="(form.direction === 'ИТ' && subcategories.length > 0)"
-          v-model="form.subcategory"
-          :items="subcategories"
-          label="Подкатегория"
-          required
-          variant="outlined"
-        ></v-autocomplete>
 
         <v-textarea
           v-model="form.description"
@@ -817,6 +809,7 @@ const form = ref({
   requestType: null,
   category: null,
   subcategory: null,
+  title: '',
   description: '',
   links: [],
   files: [],
@@ -1040,7 +1033,7 @@ const createItTicket = async () => {
             'ufCrm47_1706781047803': fields.value.ufCrm47_1706781047803.items.find(item => item.VALUE === form.value.direction).ID,
             'ufCrm47_1698839766': descriptionText,
             'ufCrm47_1698839820': b64Files,
-            'ufCrm47_1706781277387': form.value.links.join(', '),
+            'ufCrm47_1770827080317': form.value.links.join(', '), //1706781277387
             '1752822542': form.value.category,
             'ufCrm47_1752752059810': form.value.subcategory ? fields.value.ufCrm47_1752752059810.items.find(item => item.VALUE === form.value.subcategory).ID : null,
             'ufCrm47_1770824397': `Направление: ${form.value.direction}\n${form.value.direction === "Б24" ? `Категория: ${form.value.category}\n` : ''}Описание: ${form.value.description}${form.value.links.length > 0 ? `\nСсылки: ${form.value.links.join(', ')}` : ''}`
@@ -1085,6 +1078,7 @@ const createItTicket = async () => {
         files: [],
       };
       
+      resetTouchedFields();
       newLink.value = '';
       successDialog.value = true;
     }
@@ -1413,6 +1407,7 @@ const loadSubcategoryOptions = async () => {
     const subcategoryField = fields.value.ufCrm47_1752752059810;
     requestTypes.value = fields.value.ufCrm47_1772013890.items;
     categories.value = fields.value.ufCrm47_1752822542.items;
+
     console.log(fields.value.ufCrm47_1752822542.items);
     if (!subcategoryField || !subcategoryField.items) {
       console.error('Поле подкатегорий не найдено или не содержит items');
@@ -1826,7 +1821,7 @@ const completeStepper = async() => {
             'ufCrm47_1752218774249': urgency.value ? fields.value.ufCrm47_1752218774249.items.find(item => item.VALUE === urgency.value).ID : null,
             'ufCrm47_1752218834398': threatsOpportunities.value ? fields.value.ufCrm47_1752218834398.items.find(item => item.VALUE === threatsOpportunities.value).ID : null,
             'ufCrm47_1752218606665': project.value,
-            'ufCrm47_1706781277387': form.value.links.join(', '),
+            'ufCrm47_1770827080317': form.value.links.join(', '),
             'ufCrm47_1770824397': oldValues,
           }
         }, (res) => {
@@ -1867,6 +1862,7 @@ const completeStepper = async() => {
           };
           
           step.value = 1;
+          resetTouchedFields();
           newLink.value = '';
           project.value = '';
           urgency.value = null;
