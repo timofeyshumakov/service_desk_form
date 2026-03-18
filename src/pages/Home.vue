@@ -33,6 +33,12 @@
           :rules="[v => !!v || 'Тип заявки обязателен']"
           :error="touchedFields.requestType && !form.requestType"
         ></v-autocomplete>
+        <v-checkbox
+          v-if="form.direction === '1С'"
+          v-model="form.isImportant"
+          label="Важно"
+          color="warning"
+        ></v-checkbox>
         <v-autocomplete
           v-if="form.direction === 'Б24'"
           v-model="form.category"
@@ -117,7 +123,6 @@
         <v-file-input
           v-model="questions.errorScreenshot"
           label="2. Скриншот ошибки"
-          accept="image/*"
           variant="outlined"
           prepend-icon="mdi-camera"
           multiple
@@ -211,21 +216,10 @@
         <v-row>
           <v-col cols="12" md="6">
             <v-text-field
-              v-model="questions.desiredDate"
-              label="6. Желаемый срок"
-              type="date"
-              variant="outlined"
-              required
-              :rules="[v => !!v || 'Поле обязательно']"
-              :error="touchedFields.desiredDate && !questions.desiredDate"
-            ></v-text-field>
-          </v-col>
-          <v-col cols="12" md="6">
-            <v-text-field
               v-model="questions.desiredDateReason"
-              label="Причина установки срока"
+              label="6. Есть ли желаемый срок"
+              placeholder="Дата и причина установки срока"
               variant="outlined"
-              placeholder="Почему именно этот срок?"
               required
               :rules="[v => !!v || 'Поле обязательно']"
               auto-grow
@@ -345,15 +339,15 @@
           :error="touchedFields.accessDatabase && !questions.accessDatabase"
         ></v-text-field>
 
-        <v-select
+        <v-v-text-field
           v-model="questions.accessLevel"
-          :items="accessLevelOptions"
           label="3. Какой уровень доступа нужен?"
+          placeholder="Просмотр / ввод / проведение / как у кого?"
           variant="outlined"
           required
           :rules="[v => !!v || 'Поле обязательно']"
           :error="touchedFields.accessLevel && !questions.accessLevel"
-        ></v-select>
+        ></v-v-text-field>
 
         <v-text-field
           v-model="questions.accessObjects"
@@ -821,6 +815,7 @@ const form = ref({
   description: '',
   links: [],
   files: [],
+  isImportant: false,
 });
 const step = ref(1); // Начинаем сразу со 2 шага для демонстрации
 const valid = ref(false);
@@ -902,7 +897,6 @@ const validateSecondStep = () => {
       touchedFields.value.businessGoal = true;
       touchedFields.value.location = true;
       touchedFields.value.criticality = true;
-      touchedFields.value.desiredDate = true;
       touchedFields.value.desiredDateReason = true;
       
       isValid = !!(questions.value.currentSituation && 
@@ -910,7 +904,6 @@ const validateSecondStep = () => {
                    questions.value.businessGoal && 
                    questions.value.location && 
                    questions.value.criticality &&
-                   questions.value.desiredDate &&
                    questions.value.desiredDateReason);
     }
     
@@ -1078,15 +1071,18 @@ const createItTicket = async () => {
       });
 
       // Сбрасываем форму
-      form.value = {
-        direction: null,
-        requestType: null,
-        category: null,
-        subcategory: null,
-        description: '',
-        links: [],
-        files: [],
-      };
+          form.value = {
+            direction: null,
+            requestType: null,
+            category: null,
+            subcategory: null,
+            description: '',
+            links: [],
+            files: [],
+            isImportant: false,
+          };
+          
+          step.value = 1;
       
       resetTouchedFields();
       newLink.value = '';
@@ -1555,7 +1551,6 @@ const isValid = computed(() => {
                questions.value.businessGoal && 
                questions.value.location && 
                questions.value.criticality &&
-               questions.value.desiredDate &&
                questions.value.desiredDateReason);
     }
     
@@ -1755,9 +1750,6 @@ const completeStepper = async() => {
         additionalQuestions.push(`Зачем нужно изменение: ${questions.value.businessGoal}`);
         additionalQuestions.push(`Где происходит: ${questions.value.location}`);
         additionalQuestions.push(`Критичность: ${questions.value.criticality}`);
-        if (questions.value.desiredDate) {
-          additionalQuestions.push(`Желаемый срок: ${questions.value.desiredDate}`);
-        }
         if (questions.value.desiredDateReason) {
           additionalQuestions.push(`Причина срока: ${questions.value.desiredDateReason}`);
         }
@@ -1789,6 +1781,7 @@ const completeStepper = async() => {
 
     const oldValues = [
       form.value.direction && `Направление: ${form.value.direction}`,
+      form.value.isImportant !== undefined && `Важно[1С]: ${form.value.isImportant ? 'Да' : 'Нет'}`,
       form.value.requestType && `Тип заявки: ${fields.value.ufCrm47_1751371044498.items[fields.value.ufCrm47_1772013890.items.findIndex(item => item.VALUE === form.value.requestType)].VALUE}`,
       form.value.category && `Категория: ${form.value.category}`,
       form.value.subcategory && `Подкатегория: ${form.value.subcategory}`,
@@ -1843,6 +1836,7 @@ const completeStepper = async() => {
             description: '',
             links: [],
             files: [],
+            isImportant: false,
           };
           
           // Сбрасываем дополнительные вопросы
