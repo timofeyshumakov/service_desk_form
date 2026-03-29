@@ -51,7 +51,6 @@
           variant="outlined"
         ></v-autocomplete>
         <v-combobox
-          v-if="(form.direction === 'ИТ')"
           v-model="form.title"
           label="Краткое описание / Тема"
           required
@@ -212,9 +211,6 @@
           auto-grow
           :error="touchedFields.criticality && !questions.criticality"
         ></v-select>
-
-        <v-row>
-          <v-col cols="12" md="6">
             <v-text-field
               v-model="questions.desiredDateReason"
               label="6. Есть ли желаемый срок"
@@ -225,8 +221,6 @@
               auto-grow
               :error="touchedFields.desiredDateReason && !questions.desiredDateReason"
             ></v-text-field>
-          </v-col>
-        </v-row>
       </template>
 
       <!-- Блок для типа 3: "Корреĸтировĸа данных / Консультация" -->
@@ -339,7 +333,7 @@
           :error="touchedFields.accessDatabase && !questions.accessDatabase"
         ></v-text-field>
 
-        <v-v-text-field
+        <v-text-field
           v-model="questions.accessLevel"
           label="3. Какой уровень доступа нужен?"
           placeholder="Просмотр / ввод / проведение / как у кого?"
@@ -347,7 +341,7 @@
           required
           :rules="[v => !!v || 'Поле обязательно']"
           :error="touchedFields.accessLevel && !questions.accessLevel"
-        ></v-v-text-field>
+        ></v-text-field>
 
         <v-text-field
           v-model="questions.accessObjects"
