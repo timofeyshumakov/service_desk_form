@@ -1777,6 +1777,7 @@ const completeStepper = async() => {
       form.value.direction && `Направление: ${form.value.direction}`,
       form.value.isImportant !== undefined && `Важно[1С]: ${form.value.isImportant ? 'Да' : 'Нет'}`,
       form.value.requestType && `Тип заявки: ${fields.value.ufCrm47_1751371044498.items[fields.value.ufCrm47_1772013890.items.findIndex(item => item.VALUE === form.value.requestType)].VALUE}`,
+      form.value.title && `Тема: ${form.value.title}`,
       form.value.category && `Категория: ${form.value.category}`,
       form.value.subcategory && `Подкатегория: ${form.value.subcategory}`,
       form.value.description && `Описание: ${form.value.description}`,
@@ -1805,6 +1806,7 @@ const completeStepper = async() => {
           entityTypeId: 172,
           fields: {
             "categoryId": categoryId,
+            'ufCrm_47_1700466732': form.value.title,
             'ufCrm47_1752822542': form.value.category ? form.value.category.indexOf("[Б24]: ") >= 0 ? fields.value.ufCrm47_1752822542.items.find(item => item.VALUE === form.value.category.replace("[Б24]: ", "")).ID : null : null,
             'ufCrm47_1752752059810': form.value.subcategory ? fields.value.ufCrm47_1752752059810.items.find(item => item.VALUE === form.value.subcategory).ID : null,
             'ufCrm47_1752822806': form.value.category ? form.value.category.indexOf("[ИТ]: ") >= 0 ? fields.value.ufCrm47_1752822806.items.find(item => item.VALUE === form.value.category.replace("[ИТ]: ", "")).ID : null : null,
@@ -1827,6 +1829,7 @@ const completeStepper = async() => {
             requestType: null,
             category: null,
             subcategory: null,
+            title: '',
             description: '',
             links: [],
             files: [],
