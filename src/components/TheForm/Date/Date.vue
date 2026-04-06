@@ -225,8 +225,8 @@ export default {
                 this.selectedDate[1] = moment().add(1, 'years').endOf('years');
                 break;
             case "Точная дата":
-                this.selectedDate[0] = moment(this.selectedDay).startOf('day');
-                this.selectedDate[1] = moment(this.selectedDay).endOf('day');
+                this.selectedDate[0] = moment(this.selectedDay).startOf('day').add(15, 'hours');
+                this.selectedDate[1] = moment(this.selectedDay).endOf('day').subtract(8, 'hours');
                 break;
             case "Диапазон":
                 this.selectedDate[0] = moment(this.selectedRange[0]).startOf('day');
@@ -243,6 +243,7 @@ export default {
 
             this.selectedDateIso[0] = this.selectedDate[0] ? this.selectedDate[0].subtract(12, 'hours').toISOString() : null;
             this.selectedDateIso[1] = this.selectedDate[1] ? this.selectedDate[1].add(12, 'hours').toISOString() : null;
+            console.log(this.selectedDateIso);
             this.$emit('update:selectedDateIso[0]', this.selectedDateIso[0]);
             this.$emit('update:selectedDateIso[1]', this.selectedDateIso[1]);
             this.$emit('sendValue', this.selectedDateIso);

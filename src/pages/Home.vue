@@ -201,7 +201,7 @@
           :error="touchedFields.location && !questions.location"
         ></v-text-field>
 
-        <v-select
+        <v-autocomplete
           v-model="questions.criticality"
           :items="criticalityOptions"
           label="5. Насколько критично изменение?"
@@ -210,7 +210,7 @@
           :rules="[v => !!v || 'Поле обязательно']"
           auto-grow
           :error="touchedFields.criticality && !questions.criticality"
-        ></v-select>
+        ></v-autocomplete>
             <v-text-field
               v-model="questions.desiredDateReason"
               label="6. Есть ли желаемый срок"
@@ -225,16 +225,17 @@
 
       <!-- Блок для типа 3: "Корреĸтировĸа данных / Консультация" -->
       <template v-if="form.requestType === 'Корреĸтировĸа данных / Консультация'">
-        <v-select
+        <v-autocomplete
           v-model="questions.subType"
           :items="correctionSubTypes"
           label="Выберите тип"
           variant="outlined"
           required
+          clearable
           :rules="[v => !!v || 'Поле обязательно']"
           @update:modelValue="onSubTypeChange"
           :error="touchedFields.subType && !questions.subType"
-        ></v-select>
+        ></v-autocomplete>
 
         <!-- Подблок для "Очистка/корректировка данных" -->
         <template v-if="questions.subType === 'Очистĸа/ĸорреĸтировĸа данных'">
@@ -456,7 +457,7 @@
       <v-card-text class="pa-6">
         <div class="reports-menu">
           <v-card 
-            v-for="report in reports" 
+            v-for="report in visibleReports" 
             :key="report.id"
             class="report-card mb-4"
             :class="{ 'report-card-active': selectedReport === report.id }"
@@ -621,7 +622,11 @@
         <v-data-table v-else
           :items="tasksTableDate" 
           :headers="tasksTableHeaders" 
-          :group-by="[{ key: 'responsibleFullName', order: 'asc' }]" 
+          item-value="uniqueKey"
+          :group-by="[
+            { key: 'responsibleFullName', order: 'asc' },
+            { key: 'createdDateGroup', order: 'desc' },
+          ]" 
           items-per-page="-1" 
           hide-default-footer
           ref="tasksTable"
@@ -630,8 +635,8 @@
           >
 <template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
             <tr>
-              <td :colspan="columns.length" class="summary-grid-container">
-                <div class="summary-grid-compact">
+              <td :colspan="columns.length" :class="item.key === 'createdDateGroup' ? 'tasks-date-group-header' : 'summary-grid-container'">
+                <div v-if="item.key === 'responsibleFullName'" class="summary-grid-compact">
                   <div class="grid-header">
                     <v-btn size="small" :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'" 
                           @click="toggleGroup(item)" class="toggle-btn"></v-btn>
@@ -663,6 +668,14 @@
                       <span class="stat-label">Время затрачено:</span>
                     </div>
                   </div>
+                </div>
+                <div v-else class="tasks-date-subgroup d-flex align-center flex-wrap py-1">
+                  <v-btn size="small" :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'" 
+                        @click="toggleGroup(item)" class="toggle-btn"></v-btn>
+                  <span class="text-body-2 font-weight-medium">Дата создания: {{ formatCreatedDateGroupHeader(item.value) }}</span>
+                  <span class="text-caption text-medium-emphasis ml-2">
+                    задач: {{ getDateSubgroupTaskCount(item) }}, время: {{ getDateSubgroupTimeSpent(item) }} ч
+                  </span>
                 </div>
               </td>
             </tr>
@@ -785,12 +798,355 @@
     </v-card-text>
   </v-card>
 </v-dialog>
+
+  <v-dialog v-model="newReportsDialog" max-width="1400" scrollable>
+    <v-card>
+      <v-card-title class="primary white--text d-flex justify-space-between align-center">
+        <div class="d-flex align-center">
+          <v-btn icon @click="backToReportsMenu" class="mr-2">
+            <v-icon>mdi-arrow-left</v-icon>
+          </v-btn>
+          {{ newReportDialogTitle }}
+        </div>
+        <div class="d-flex align-center">
+          <v-btn icon @click="exportNewReportToExcel" title="Экспорт в Excel" class="mr-2" :disabled="newReportsLoading">
+            <v-icon>mdi-file-excel</v-icon>
+          </v-btn>
+          <v-btn icon small @click="newReportsDialog = false" class="ma-1">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </div>
+      </v-card-title>
+
+      <v-card-text class="pa-6 text-center">
+        <v-tabs v-model="newReportTab" density="comfortable" color="primary">
+          <v-tab value="1">Отчет 1</v-tab>
+          <v-tab value="2">Отчет 2</v-tab>
+          <v-tab value="3">Отчет 3</v-tab>
+          <v-tab value="4">Жизненный цикл</v-tab>
+        </v-tabs>
+
+        <NewReportsFilters
+          v-model:selectedResponsibles="newReportSelectedResponsibles"
+          v-model:selectedDirections="newReportSelectedDirections"
+          :report-tab="newReportTab"
+          :responsibles="newReportResponsibles"
+          :directions="newReportDirections"
+          :loading="newReportsLoading"
+          :show-input="newReportDateShowInput"
+          :selected-date-iso="newReportSelectedDateIso"
+          @send-date="onNewReportDateSend"
+          @submit="loadNewReport"
+        />
+
+        <div class="new-report-summary mt-4">
+          <v-row v-if="newReportTab === '3'">
+            <v-col cols="12" md="4">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">Задач в отчёте</div>
+                  <div class="text-h5">{{ newReportSummary.completed }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" md="4">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">Суммарные трудозатраты</div>
+                  <div class="text-h5">{{ newReportSummary.report3DurationLabel }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" md="4">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">Строк в таблице</div>
+                  <div class="text-h5">{{ newReportRows.length }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+          <v-row v-else-if="newReportTab === '4'">
+            <v-col cols="12" md="4">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">Задач в отчёте</div>
+                  <div class="text-h5">{{ newReportSummary.completed }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" md="4">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">Среднее время принятия</div>
+                  <div class="text-h5">{{ newReportSummary.report4AvgAcceptLabel }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" md="4">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">Среднее время выполнения</div>
+                  <div class="text-h5">{{ newReportSummary.report4AvgCompleteLabel }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+          <v-row v-else>
+            <v-col cols="12" md="3">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">{{ newReportLabels.completed }}</div>
+                  <div class="text-h5">{{ newReportSummary.completed }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">{{ newReportLabels.overdue }}</div>
+                  <div class="text-h5">{{ newReportSummary.overdue }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">{{ newReportLabels.onTime }}</div>
+                  <div class="text-h5">{{ newReportSummary.onTimePercent }}%</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-card variant="outlined">
+                <v-card-text>
+                  <div class="text-caption">Строк в отчете</div>
+                  <div class="text-h5">{{ newReportRows.length }}</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+          <div class="text-body-2 mt-2">{{ newReportSummary.text }}</div>
+        </div>
+
+        <v-data-table
+          class="mt-4"
+          :loading="newReportsLoading"
+          :headers="newReportHeaders"
+          :items="newReportRows"
+          :group-by="newReportTableGroupBy"
+          item-value="taskId"
+          items-per-page="-1"
+          hide-default-footer
+        >
+          <template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
+            <tr>
+              <td
+                v-if="newReportTab === '4'"
+                :colspan="columns.length"
+                :class="item.key === 'category' ? 'tasks-date-group-header' : 'summary-grid-container'"
+              >
+                <div v-if="item.key === 'taskType'" class="summary-grid-compact">
+                  <div class="grid-header">
+                    <v-btn
+                      size="small"
+                      :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'"
+                      class="toggle-btn"
+                      @click="toggleGroup(item)"
+                    />
+                    <span class="executor-name">{{ item.value }}</span>
+                  </div>
+                  <div class="grid-stats">
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport7TypeSummary(item.value).totalTasks }}</span>
+                      <span class="stat-label">Всего задач</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport7TypeSummary(item.value).completedTasks }}</span>
+                      <span class="stat-label">Завершено</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport7TypeSummary(item.value).inProgressTasks }}</span>
+                      <span class="stat-label">В работе</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport7TypeSummary(item.value).newTasks }}</span>
+                      <span class="stat-label">Новые</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport7TypeSummary(item.value).totalAcceptHours }}</span>
+                      <span class="stat-label">Σ срок принятия, ч</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="tasks-date-subgroup d-flex align-center flex-wrap py-1">
+                  <v-btn
+                    size="small"
+                    :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'"
+                    class="toggle-btn"
+                    @click="toggleGroup(item)"
+                  />
+                  <span class="text-body-2 font-weight-medium">Категория: {{ item.value }}</span>
+                  <span class="text-caption text-medium-emphasis ml-2">
+                    задач: {{ countReport4GroupRows(item) }}, Σ срок принятия: {{ getReport7CategoryAcceptHours(item) }} ч
+                  </span>
+                </div>
+              </td>
+              <td
+                v-else-if="newReportTab === '3'"
+                :colspan="columns.length"
+                :class="item.key === 'createdDateGroup' ? 'tasks-date-group-header' : 'summary-grid-container'"
+              >
+                <div v-if="item.key === 'responsibleName'" class="summary-grid-compact">
+                  <div class="grid-header">
+                    <v-btn
+                      size="small"
+                      :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'"
+                      class="toggle-btn"
+                      @click="toggleGroup(item)"
+                    />
+                    <span class="executor-name">{{ item.value }}</span>
+                  </div>
+                  <div class="grid-stats">
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport3PostanovshikSummary(item.value).totalTasks }}</span>
+                      <span class="stat-label">Всего задач</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport3PostanovshikSummary(item.value).completedTasks }}</span>
+                      <span class="stat-label">Завершено</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport3PostanovshikSummary(item.value).inProgressTasks }}</span>
+                      <span class="stat-label">В работе</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport3PostanovshikSummary(item.value).newTasks }}</span>
+                      <span class="stat-label">Новые</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getReport3PostanovshikSummary(item.value).totalTimeSpent }}</span>
+                      <span class="stat-label">Время затрачено:</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="tasks-date-subgroup d-flex align-center flex-wrap py-1">
+                  <v-btn
+                    size="small"
+                    :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'"
+                    class="toggle-btn"
+                    @click="toggleGroup(item)"
+                  />
+                  <span class="text-body-2 font-weight-medium">Дата создания: {{ formatCreatedDateGroupHeader(item.value) }}</span>
+                  <span class="text-caption text-medium-emphasis ml-2">
+                    задач: {{ getDateSubgroupTaskCount(item) }}, время: {{ getReport3DateSubgroupDurationHours(item) }} ч
+                  </span>
+                </div>
+              </td>
+              <td v-else-if="newReportTab !== '4'" :colspan="columns.length" class="summary-grid-container">
+                <div class="summary-grid-compact">
+                  <div class="grid-header">
+                    <v-btn size="small" :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'" @click="toggleGroup(item)" class="toggle-btn" />
+                    <span class="executor-name">{{ item.value }}</span>
+                  </div>
+                  <div class="grid-stats">
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getNewReportGroupSummary(item.value).completed }}</span>
+                      <span class="stat-label">{{ newReportLabels.completed }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getNewReportGroupSummary(item.value).overdue }}</span>
+                      <span class="stat-label">{{ newReportLabels.overdue }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-number">{{ getNewReportGroupSummary(item.value).onTimePercent }}%</span>
+                      <span class="stat-label">{{ newReportLabels.onTime }}</span>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </template>
+
+          <template v-slot:item.title="{ item }">
+            <a :href="item.taskUrl" target="_blank" class="task-link">{{ item.title }}</a>
+          </template>
+          <template v-slot:item.taskDescriptionDisplay="{ item }">
+            <div v-if="newReportTab === '3' || newReportTab === '4'" class="report3-desc-cell">
+              <a :href="item.taskUrl" target="_blank" class="task-link d-block">{{ item.title }}</a>
+              <div v-if="item.taskDescriptionBody" class="text-body-2 text-medium-emphasis mt-1">{{ item.taskDescriptionBody }}</div>
+            </div>
+          </template>
+        </v-data-table>
+
+        <div
+          v-if="newReportTab === '4' && newReportRows.length"
+          class="report4-avg-breakdown text-left mt-6"
+        >
+          <div class="text-subtitle-2 mb-3">
+            Средние значения по колонкам «Срок принятия задачи» и «Срок выполнения задачи» (часы и минуты)
+          </div>
+
+          <div class="mb-4">
+            <div class="font-weight-medium mb-2">Группировка: тип задачи</div>
+            <v-table v-if="newReportSummary.report4AvgByTaskType.length" density="compact" class="report4-avg-table border rounded">
+              <thead>
+                <tr>
+                  <th class="text-left">Тип задачи</th>
+                  <th class="text-left">Среднее время принятия</th>
+                  <th class="text-left">Среднее время выполнения</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in newReportSummary.report4AvgByTaskType" :key="'r4-tt-' + row.label">
+                  <td>{{ row.label }}</td>
+                  <td>{{ row.avgAcceptLabel }}</td>
+                  <td>{{ row.avgCompleteLabel }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+            <div v-else class="text-body-2 text-medium-emphasis">Нет данных для расчёта по типам.</div>
+          </div>
+
+          <div class="mb-4">
+            <div class="font-weight-medium mb-2">Группировка: категория</div>
+            <v-table v-if="newReportSummary.report4AvgByCategory.length" density="compact" class="report4-avg-table border rounded">
+              <thead>
+                <tr>
+                  <th class="text-left">Категория</th>
+                  <th class="text-left">Среднее время принятия</th>
+                  <th class="text-left">Среднее время выполнения</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in newReportSummary.report4AvgByCategory" :key="'r4-cat-' + row.label">
+                  <td>{{ row.label }}</td>
+                  <td>{{ row.avgAcceptLabel }}</td>
+                  <td>{{ row.avgCompleteLabel }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+            <div v-else class="text-body-2 text-medium-emphasis">Нет данных для расчёта по категориям.</div>
+          </div>
+
+          <div>
+            <div class="font-weight-medium mb-2">Итоги</div>
+            <ul class="pl-6 mb-0 text-body-2">
+              <li>Среднее время принятия задачи: {{ newReportSummary.report4AvgAcceptLabel }}</li>
+              <li>Среднее время выполнения задачи: {{ newReportSummary.report4AvgCompleteLabel }}</li>
+            </ul>
+          </div>
+        </div>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
   </v-app>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import TheForm from '../components/TheForm/TheForm.vue';
+import NewReportsFilters from '../components/TheForm/NewReportsFilters.vue';
 import moment from 'moment';
 import { callApi, getTaskElapsedItems } from '../functions/callApi';
 import * as XLSX from 'xlsx';
@@ -931,8 +1287,6 @@ const validateSecondStep = () => {
       touchedFields.value.accessLevel = true;
       touchedFields.value.accessObjects = true;
 
-      console.log(questions.value);
-      
       isValid = !!(questions.value.accessRecipient && 
                   questions.value.accessDatabase && 
                   questions.value.accessLevel &&
@@ -1408,7 +1762,6 @@ const loadSubcategoryOptions = async () => {
     requestTypes.value = fields.value.ufCrm47_1772013890.items;
     categories.value = fields.value.ufCrm47_1752822542.items;
 
-    console.log(fields.value.ufCrm47_1752822542.items);
     if (!subcategoryField || !subcategoryField.items) {
       console.error('Поле подкатегорий не найдено или не содержит items');
       return;
@@ -1892,7 +2245,6 @@ const completeStepper = async() => {
     successDialog.value = true;
   }
   isLoading.value = false;
-            console.log(step.value);
 };
 
 const showVideo = ref(false);
@@ -2030,11 +2382,1295 @@ const reports = ref([
     title: 'Отчет по задачам категории ИТ',
     description: 'Количество задач и затраченное время с фильтрами',
     icon: 'mdi-chart-bar'
+  },
+  {
+    id: 4,
+    title: 'Отчет по просроченным задачам',
+    description: 'Выполненные задачи с SLA и направлениями',
+    icon: 'mdi-view-dashboard-outline'
+  },
+  {
+    id: 5,
+    title: 'Отчет по приему задач-тиĸетов',
+    description: 'Принятые тикеты с SLA по направлениям',
+    icon: 'mdi-ticket-confirmation-outline'
+  },
+  {
+    id: 6,
+    title: 'Отчт по поставленным и выполненным задачам',
+    description: 'Трудозатраты по постановщикам и типам',
+    icon: 'mdi-chart-timeline-variant'
+  },
+  {
+    id: 7,
+    title: 'Жизненный цикл задач',
+    description: 'Тип, категория, сроки по задаче и элементу смарт-процесса',
+    icon: 'mdi-timeline-clock-outline'
   }
 ]);
+
+const canAccessReports4to7 = computed(() =>
+  REPORTS_4_7_ALLOWED_USER_IDS.has(String(currentUser.value ?? ''))
+);
+
+/** Карточки отчётов 4–7 скрыты, если пользователь не в белом списке */
+const visibleReports = computed(() => {
+  if (canAccessReports4to7.value) {
+    return reports.value;
+  }
+  return reports.value.filter((r) => r.id <= 3);
+});
+
 const report3Dialog = ref(false);
+const newReportsDialog = ref(false);
 const tasksDetailedTableDate = ref([]);
 const tasksDetailedLoading = ref(false);
+
+/** Рабочая группа задач: фильтр `tasks.task.list` только в новых отчётах (пункты меню 4–7), не в отчётах через TheForm */
+const NEW_REPORT_GROUP_ID = 517;
+const NEW_REPORT_ENTITY_ID = 172;
+const NEW_REPORT_TASK_LINK_FIELD = 'ufCrm47_1701780020523';
+/** Отчёты 4–7 в меню: только эти пользователи (id из Bitrix24) */
+const REPORTS_4_7_ALLOWED_USER_IDS = new Set(['9097', '8639', '320', '8951', '5726', '12031', '12993']);
+const NEW_REPORT_RESPONSIBLE_IDS = ['9097', '12993', '14087', '489', '15401', '12181', '13063', '12031'];
+const newReportTab = ref('1');
+const newReportsLoading = ref(false);
+const newReportResponsibles = ref([]);
+const newReportDirections = ref(['1С', 'Б24', 'ИТ', 'Без направления']);
+const newReportSelectedResponsibles = ref([]);
+const newReportSelectedDirections = ref(['1С', 'Б24', 'ИТ', 'Без направления']);
+
+const newReportRows = ref([]);
+const newReportSummary = ref({
+  completed: 0,
+  overdue: 0,
+  onTimePercent: 0,
+  report3DurationLabel: '—',
+  report4AvgAcceptLabel: '—',
+  report4AvgCompleteLabel: '—',
+  report4AvgByTaskType: [],
+  report4AvgByCategory: [],
+  text: ''
+});
+
+const newReportDateShowInput = ref([false, false, false, false, false, false, false]);
+const newReportSelectedDateIso = ref([null, null]);
+
+const onNewReportDateSend = (value) => {
+  if (!Array.isArray(value)) {
+    return;
+  }
+  newReportSelectedDateIso.value = value;
+  if (value[0] != null && value[0] !== '' && value[1] != null && value[1] !== '') {
+    sessionStorage.setItem('date', `${value[0]},${value[1]}`);
+  }
+};
+
+const newReportLabels = computed(() => {
+  if (newReportTab.value === '2') {
+    return { completed: 'Принятые тикеты', overdue: 'Принятые невовремя', onTime: 'Принято вовремя' };
+  }
+  if (newReportTab.value === '3') {
+    return { completed: 'Задач в отчёте', overdue: 'Суммарные трудозатраты', onTime: 'По полям группировки' };
+  }
+  return { completed: 'Выполненные задачи', overdue: 'Просроченные задачи', onTime: 'Выполнено вовремя' };
+});
+
+/** Заголовок диалога совпадает с названием в меню отчётов: вкладка «1» → пункт id 4 и т.д. */
+const newReportDialogTitle = computed(() => {
+  const menuId = Number(newReportTab.value) + 3;
+  const r = reports.value.find((x) => x.id === menuId);
+  return r?.title || 'Отчет';
+});
+
+const newReportHeaders = computed(() => {
+  if (newReportTab.value === '3') {
+    return [
+      { title: 'Постановщик', value: 'responsibleName', sortable: true },
+      { title: 'Дата создания', value: 'createdDateFormatted', sortable: true },
+      { title: 'Подразделение постановщика', value: 'department', sortable: true },
+      { title: 'Тип задачи', value: 'taskType', sortable: true },
+      { title: 'Категория задачи', value: 'category', sortable: true },
+      { title: 'Описание задачи', value: 'taskDescriptionDisplay', sortable: false },
+      { title: 'Суммарные трудозатраты', value: 'durationLabel', sortable: true },
+      { title: 'Направление', value: 'direction', sortable: true },
+    ];
+  }
+  if (newReportTab.value === '4') {
+    return [
+      { title: 'Тип', value: 'taskType', sortable: true },
+      { title: 'Категория', value: 'category', sortable: true },
+      { title: 'Описание задачи', value: 'taskDescriptionDisplay', sortable: false },
+      { title: 'Дата и время постановки задачи', value: 'crmPostanovkaLabel', sortable: true },
+      { title: 'Дата и время принятия задачи', value: 'crmAcceptanceLabel', sortable: true },
+      { title: 'Дата и время выполнения задачи', value: 'crmExecutionLabel', sortable: true },
+      { title: 'Дата и время закрытия задачи', value: 'taskClosedAtLabel', sortable: true },
+      { title: 'Срок принятия задачи', value: 'acceptDurationLabel', sortable: true },
+      { title: 'Срок выполнения задачи', value: 'completeDurationLabel', sortable: true },
+      { title: 'Направление', value: 'direction', sortable: true },
+    ];
+  }
+  return [
+    { title: newReportTab.value === '2' ? 'Аналитик' : 'Исполнитель', value: 'responsibleName', sortable: true },
+    { title: newReportTab.value === '2' ? 'Тикет' : 'Описание', value: 'title', sortable: true },
+    { title: newReportTab.value === '2' ? 'SLA выполнен' : 'Закрыта в срок', value: 'onTimeLabel', sortable: true },
+    { title: newReportTab.value === '2' ? 'Дата/Время приемки' : 'Дата закрытия', value: 'closedDateLabel', sortable: true },
+    { title: newReportTab.value === '2' ? 'Дата создания' : 'Крайний срок', value: 'deadlineLabel', sortable: true },
+    { title: 'Направление', value: 'direction', sortable: true },
+  ];
+});
+
+const newReportTableGroupBy = computed(() => {
+  if (newReportTab.value === '3') {
+    // Как в «Отчет по задачам»: постановщик → дата создания
+    return [
+      { key: 'responsibleName', order: 'asc' },
+      { key: 'createdDateGroup', order: 'desc' },
+    ];
+  }
+  if (newReportTab.value === '4') {
+    return [
+      { key: 'taskType', order: 'asc' },
+      { key: 'category', order: 'asc' },
+    ];
+  }
+  return [{ key: 'responsibleName', order: 'asc' }];
+});
+
+const normalizeCallApiList = (payload, key) => {
+  if (Array.isArray(payload)) {
+    const nested = payload.some((entry) => entry && Array.isArray(entry[key]));
+    if (nested) {
+      return payload.flatMap((entry) => (Array.isArray(entry?.[key]) ? entry[key] : []));
+    }
+    return payload;
+  }
+  if (payload && Array.isArray(payload[key])) {
+    return payload[key];
+  }
+  return [];
+};
+
+const getNewReportDateRange = () => {
+  const isoPair = newReportSelectedDateIso.value;
+  if (Array.isArray(isoPair) && isoPair[0] && isoPair[1]) {
+    const fromM = moment(isoPair[0]);
+    const toM = moment(isoPair[1]);
+    if (fromM.isValid() && toM.isValid()) {
+      const dateFrom = fromM.format('YYYY-MM-DD');
+      const dateTo = toM.format('YYYY-MM-DD');
+      if (moment(dateFrom).isAfter(moment(dateTo))) {
+        return { dateFrom: dateTo, dateTo: dateFrom };
+      }
+      return { dateFrom, dateTo };
+    }
+  }
+
+  const rawRange = sessionStorage.getItem('date') || '';
+  if (!rawRange) {
+    const now = moment();
+    return { dateFrom: now.clone().startOf('month').format('YYYY-MM-DD'), dateTo: now.format('YYYY-MM-DD') };
+  }
+
+  const commaIdx = rawRange.indexOf(',');
+  if (commaIdx === -1) {
+    const now = moment();
+    return { dateFrom: now.clone().startOf('month').format('YYYY-MM-DD'), dateTo: now.format('YYYY-MM-DD') };
+  }
+  const rawFrom = rawRange.slice(0, commaIdx).trim();
+  const rawTo = rawRange.slice(commaIdx + 1).trim();
+  const from = rawFrom ? rawFrom.split('T')[0] : '';
+  const to = rawTo ? rawTo.split('T')[0] : '';
+
+  if (from && to) {
+    if (moment(from).isAfter(moment(to))) {
+      return { dateFrom: to, dateTo: from };
+    }
+    return { dateFrom: from, dateTo: to };
+  }
+
+  const now = moment();
+  return { dateFrom: now.clone().startOf('month').format('YYYY-MM-DD'), dateTo: now.format('YYYY-MM-DD') };
+};
+
+const normalizeDirectionFromCategory = (categoryId) => {
+  if (String(categoryId) === '101') return '1С';
+  if (String(categoryId) === '103') return 'ИТ';
+  if (String(categoryId) === '105') return 'Б24';
+  return 'Без направления';
+};
+
+const loadNewReportResponsibles = async () => {
+  const usersData = await callApi('user.get', { ID: NEW_REPORT_RESPONSIBLE_IDS }, [], 0, 0, 0);
+  const normalized = (Array.isArray(usersData) ? usersData : []).map((user) => ({
+    id: String(user.ID),
+    name: `${user.LAST_NAME || ''} ${user.NAME || ''} ${user.SECOND_NAME || ''}`.trim() || `ID ${user.ID}`,
+  }));
+  normalized.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  newReportResponsibles.value = normalized;
+  newReportSelectedResponsibles.value = normalized.map((u) => u.id);
+};
+
+const loadLinkedItemsByTaskIds = async (taskIds, dateFilter = {}) => {
+  const taskSet = new Set(taskIds.map((taskId) => String(taskId)));
+  const linked = {};
+  const rawItems = await callApi(
+    'crm.item.list',
+    dateFilter,
+    ['id', 'categoryId', NEW_REPORT_TASK_LINK_FIELD],
+    NEW_REPORT_ENTITY_ID,
+    0,
+    0
+  );
+  const items = normalizeCallApiList(rawItems, 'items');
+
+  items.forEach((item) => {
+    const raw = item?.[NEW_REPORT_TASK_LINK_FIELD];
+    const linkedTaskIds = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    linkedTaskIds.forEach((taskId) => {
+      const key = String(taskId);
+      if (taskSet.has(key) && !linked[key]) {
+        linked[key] = item;
+      }
+    });
+  });
+
+  taskSet.forEach((taskId) => {
+    if (!linked[taskId]) {
+      linked[taskId] = null;
+    }
+  });
+
+  return linked;
+};
+
+/** CRM по задаче: один вызов crm.item.list — в filter все ID задач в поле связи. Ответ — массив или { items }. */
+const loadLinkedCrmItemsByTaskIds = async (taskIds, extraSelect = []) => {
+  const linked = {};
+  const taskSet = new Set(taskIds.map((id) => String(id)));
+  taskIds.forEach((id) => {
+    linked[String(id)] = null;
+  });
+  const select = [...new Set(['id', 'categoryId', NEW_REPORT_TASK_LINK_FIELD, ...extraSelect])];
+  const ids = [...taskSet];
+  if (!ids.length) {
+    return linked;
+  }
+
+  const mergeCrmBatch = (batch) => {
+    const list = Array.isArray(batch) ? batch : [];
+    list.forEach((item) => {
+      const raw = item?.[NEW_REPORT_TASK_LINK_FIELD];
+      const linkedTaskIds = Array.isArray(raw) ? raw : (raw != null && raw !== '' ? [raw] : []);
+      linkedTaskIds.forEach((taskId) => {
+        const key = String(taskId);
+        if (taskSet.has(key) && !linked[key]) {
+          linked[key] = item;
+        }
+      });
+    });
+  };
+
+  const rawItems = await callApi(
+    'crm.item.list',
+    { [NEW_REPORT_TASK_LINK_FIELD]: ids.map((id) => (Number.isNaN(Number(id)) ? id : Number(id))) },
+    select,
+    NEW_REPORT_ENTITY_ID,
+    0,
+    0
+  );
+  mergeCrmBatch(normalizeCallApiList(rawItems, 'items'));
+
+  return linked;
+};
+
+const loadNewReportTasks = async (filter, select) => {
+  const raw = await callApi('tasks.task.list', filter, select, null, 0, 0);
+  return normalizeCallApiList(raw, 'tasks');
+};
+
+const loadNewReportItems = async (filter, select) => {
+  const raw = await callApi('crm.item.list', filter, select, NEW_REPORT_ENTITY_ID, 0, 0);
+  return normalizeCallApiList(raw, 'items');
+};
+
+const handleNewReportsDateSelected = async () => {
+  if (!newReportsDialog.value) {
+    return;
+  }
+  await loadNewReport();
+};
+
+const getSlaEnumMap = () => {
+  const items = fields.value?.ufCrm47_1752010288013?.items || [];
+  return items.reduce((acc, item) => {
+    acc[String(item.ID)] = item.VALUE;
+    return acc;
+  }, {});
+};
+
+const getPortalUrl = () => `${window.location.origin}/`;
+
+const buildReport1 = async () => {
+  const { dateFrom, dateTo } = getNewReportDateRange();
+  const selectedResponsibles = new Set(newReportSelectedResponsibles.value.map(String));
+  const selectedDirections = new Set(newReportSelectedDirections.value);
+  const responsibleIds = selectedResponsibles.size ? [...selectedResponsibles] : [null];
+  const tasksById = {};
+
+  for (const responsibleId of responsibleIds) {
+    const filter = {
+      GROUP_ID: NEW_REPORT_GROUP_ID,
+      STATUS: 5,
+      '>=CLOSED_DATE': `${dateFrom}T00:00:00+05:00`,
+      '<=CLOSED_DATE': `${dateTo}T23:59:59+05:00`,
+    };
+    if (responsibleId) {
+      filter.RESPONSIBLE_ID = responsibleId;
+    }
+    const tasks = await loadNewReportTasks(
+      filter,
+      ['id', 'title', 'responsibleId', 'responsibleName', 'responsibleLastName', 'responsibleSecondName', 'closedDate', 'deadline', 'groupId']
+    );
+    tasks.forEach((task) => {
+      tasksById[String(task.id)] = task;
+    });
+  }
+
+  const rawTasks = Object.values(tasksById);
+  const usersById = {};
+  newReportResponsibles.value.forEach((user) => {
+    usersById[user.id] = user.name;
+  });
+  const linkedMap = await loadLinkedItemsByTaskIds(rawTasks.map((task) => task.id), {
+    '>=createdTime': `${dateFrom}T00:00:00+05:00`,
+    '<=createdTime': `${dateTo}T23:59:59+05:00`,
+  });
+  const rows = [];
+
+  rawTasks.forEach((task) => {
+    const taskId = String(task.id);
+    const closedAt = task.closedDate ? moment(task.closedDate) : null;
+    if (!closedAt || !closedAt.isValid()) {
+      return;
+    }
+
+    const direction = normalizeDirectionFromCategory(linkedMap[taskId]?.categoryId);
+    if (selectedDirections.size && !selectedDirections.has(direction)) {
+      return;
+    }
+
+    const deadline = task.deadline ? moment(task.deadline) : null;
+    const onTime = deadline && deadline.isValid() ? !closedAt.isAfter(deadline) : true;
+    const responsibleId = String(task.responsibleId || '');
+    const fallbackName = `${task.responsibleLastName || ''} ${task.responsibleName || ''} ${task.responsibleSecondName || ''}`.trim();
+    const responsibleName = usersById[responsibleId] || fallbackName || `ID ${responsibleId}`;
+
+    rows.push({
+      taskId,
+      title: String(task.title || ''),
+      taskUrl: `${getPortalUrl()}workgroups/group/${task.groupId || NEW_REPORT_GROUP_ID}/tasks/task/view/${taskId}/`,
+      responsibleName,
+      closedDateLabel: closedAt.format('DD.MM.YYYY HH:mm'),
+      deadlineLabel: deadline && deadline.isValid() ? deadline.format('DD.MM.YYYY HH:mm') : '—',
+      onTime,
+      onTimeLabel: onTime ? 'Да' : 'Нет',
+      direction,
+    });
+  });
+
+  rows.sort((a, b) => a.responsibleName.localeCompare(b.responsibleName, 'ru'));
+  newReportRows.value = rows;
+
+  const completed = rows.length;
+  const overdue = rows.filter((row) => !row.onTime).length;
+  const onTime = completed - overdue;
+  const onTimePercent = completed ? Math.round((onTime / completed) * 1000) / 10 : 0;
+  newReportSummary.value = {
+    completed,
+    overdue,
+    onTimePercent,
+    report3DurationLabel: '—',
+    report4AvgAcceptLabel: '—',
+    report4AvgCompleteLabel: '—',
+    report4AvgByTaskType: [],
+    report4AvgByCategory: [],
+    text: `За период выполнено ${completed} задач, из них ${onTime} вовремя и ${overdue} с просрочкой.`,
+  };
+};
+
+const buildReport2 = async () => {
+  const { dateFrom, dateTo } = getNewReportDateRange();
+  const selectedDirections = new Set(newReportSelectedDirections.value);
+  const slaMap = getSlaEnumMap();
+  const items = await loadNewReportItems(
+    {
+      '>=createdTime': `${dateFrom}T00:00:00+05:00`,
+      '<=createdTime': `${dateTo}T23:59:59+05:00`,
+    },
+    ['id', 'title', 'createdTime', 'categoryId', 'ufCrm47_1698840090', 'ufCrm47_1752010288013', 'ufCrm47_1700467615', 'ufCrm47_1740575330', 'ufCrm47_1770827080317']
+  );
+
+  const analystIds = [...new Set(items.map((item) => String(item.ufCrm47_1698840090 || '')).filter(Boolean))];
+  const users = await callApi('user.get', { ID: analystIds }, [], 0, 0, 0);
+  const usersById = {};
+  (Array.isArray(users) ? users : []).forEach((user) => {
+    usersById[String(user.ID)] = `${user.LAST_NAME || ''} ${user.NAME || ''} ${user.SECOND_NAME || ''}`.trim() || `ID ${user.ID}`;
+  });
+
+  const rows = [];
+  items.forEach((item) => {
+    const direction = normalizeDirectionFromCategory(item.categoryId);
+    if (selectedDirections.size && !selectedDirections.has(direction)) {
+      return;
+    }
+    const createdAt = item.createdTime ? moment(item.createdTime) : null;
+    if (!createdAt || !createdAt.isValid()) {
+      return;
+    }
+    const acceptedAt = item.ufCrm47_1700467615 ? moment(item.ufCrm47_1700467615) : null;
+    const analystId = String(item.ufCrm47_1698840090 || '');
+    const analystName = usersById[analystId] || 'Без аналитика';
+    const rawTitle = Array.isArray(item.ufCrm47_1770827080317) ? String(item.ufCrm47_1770827080317[0] || '') : String(item.ufCrm47_1770827080317 || '');
+    const title = rawTitle && !rawTitle.startsWith('http') && !rawTitle.startsWith('[http') ? rawTitle : String(item.title || '');
+    const taskUrl = String(item.ufCrm47_1740575330 || '') || `${getPortalUrl()}page/servicedesk_test/servis_desk_2/type/${NEW_REPORT_ENTITY_ID}/details/${item.id}/`;
+    const slaLabel = slaMap[String(item.ufCrm47_1752010288013 || '')] || 'Нет';
+    const onTime = slaLabel === 'Да';
+
+    rows.push({
+      taskId: String(item.id),
+      title,
+      taskUrl,
+      responsibleName: analystName,
+      closedDateLabel: acceptedAt && acceptedAt.isValid() ? acceptedAt.format('DD.MM.YYYY HH:mm') : '—',
+      deadlineLabel: createdAt.format('DD.MM.YYYY HH:mm'),
+      onTime,
+      onTimeLabel: onTime ? 'Да' : 'Нет',
+      direction,
+    });
+  });
+
+  rows.sort((a, b) => a.responsibleName.localeCompare(b.responsibleName, 'ru'));
+  newReportRows.value = rows;
+
+  const completed = rows.length;
+  const overdue = rows.filter((row) => !row.onTime).length;
+  const onTime = completed - overdue;
+  const onTimePercent = completed ? Math.round((onTime / completed) * 1000) / 10 : 0;
+  newReportSummary.value = {
+    completed,
+    overdue,
+    onTimePercent,
+    report3DurationLabel: '—',
+    report4AvgAcceptLabel: '—',
+    report4AvgCompleteLabel: '—',
+    report4AvgByTaskType: [],
+    report4AvgByCategory: [],
+    text: `За период принято ${completed} тикетов, из них ${onTime} вовремя и ${overdue} невовремя.`,
+  };
+};
+
+const stripHtmlForReport = (html) => {
+  if (!html || typeof html !== 'string') return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const pickTaskUserField = (task, ...candidates) => {
+  for (const key of candidates) {
+    const v = task?.[key];
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '—';
+};
+
+/** Справочник UF в tasks.task.* может прийти строкой или объектом перечисления */
+const normalizeUfScalar = (v) => {
+  if (v == null) {
+    return null;
+  }
+  if (typeof v === 'object') {
+    const inner = v.VALUE ?? v.value ?? v.NAME ?? v.name ?? v.text;
+    if (inner != null && String(inner).trim() !== '') {
+      return String(inner).trim();
+    }
+    return null;
+  }
+  const s = String(v).trim();
+  return s !== '' ? s : null;
+};
+
+/**
+ * Пользовательское поле задачи по числовому суффиксу Bitrix (929760312277 и т.д.).
+ * В ответе REST ключи часто отличаются: UF_AUTO_*, ufAuto*, сканирование по ключам.
+ */
+const pickTaskUfByNumericId = (task, numericId) => {
+  if (!task || typeof task !== 'object') {
+    return null;
+  }
+  const id = String(numericId);
+  const direct = [`UF_AUTO_${id}`, `ufAuto${id}`, `UfAuto${id}`, `uf_auto_${id}`];
+  for (const k of direct) {
+    const s = normalizeUfScalar(task[k]);
+    if (s) {
+      return s;
+    }
+  }
+  for (const k of Object.keys(task)) {
+    if (!k.includes(id)) {
+      continue;
+    }
+    if (!/uf|UF|Uf/i.test(k)) {
+      continue;
+    }
+    const s = normalizeUfScalar(task[k]);
+    if (s) {
+      return s;
+    }
+  }
+  return null;
+};
+
+const taskUfDisplay = (task, numericId) => pickTaskUfByNumericId(task, numericId) ?? '—';
+
+/** Bitrix отдаёт поля в разном регистре / алиасах */
+const getTaskCreatedRaw = (task) =>
+  task?.createdDate ?? task?.CREATED_DATE ?? task?.dateStart ?? null;
+
+const getTaskClosedRaw = (task) => task?.closedDate ?? task?.CLOSED_DATE ?? null;
+
+const getTaskTitleRaw = (task) => String(task?.title ?? task?.TITLE ?? '').trim();
+
+const getTaskDescriptionRaw = (task) =>
+  task?.description ?? task?.DESCRIPTION ?? '';
+
+/** Поля смарт-процесса (элемент CRM), привязанного к задаче */
+const LIFECYCLE_UF_POSTANOVKA = ['ufCrm47_1700467583', 'UF_CRM_47_1700467583', 'ufCrm_47_1700467583'];
+const LIFECYCLE_UF_ACCEPT = ['ufCrm47_1700467615', 'UF_CRM_47_1700467615', 'ufCrm_47_1700467615'];
+const LIFECYCLE_UF_EXEC = ['ufCrm47_1700467652', 'UF_CRM_47_1700467652', 'ufCrm_47_1700467652'];
+
+const pickCrmRaw = (crmItem, keys, tailHint = null) => {
+  if (!crmItem) return null;
+  for (const k of keys) {
+    const v = crmItem[k];
+    if (v != null && String(v).trim() !== '') {
+      return v;
+    }
+  }
+  if (tailHint) {
+    for (const k of Object.keys(crmItem)) {
+      if (!k.includes(tailHint)) {
+        continue;
+      }
+      const v = crmItem[k];
+      if (v != null && String(v).trim() !== '') {
+        return v;
+      }
+    }
+  }
+  return null;
+};
+
+const formatDurationFromMs = (ms) => {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) {
+    return '—';
+  }
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h} ч ${m} мин`;
+};
+
+const averagePositiveMs = (values) => {
+  const valid = values.filter((x) => x != null && Number.isFinite(x) && x >= 0);
+  if (!valid.length) {
+    return null;
+  }
+  return valid.reduce((a, b) => a + b, 0) / valid.length;
+};
+
+/** Средние по acceptDurationMs / completeDurationMs для отчёта «Жизненный цикл» (группировка в таблице — другая величина) */
+const computeReport4AvgByField = (rows, field) => {
+  const map = new Map();
+  for (const row of rows) {
+    const raw = row[field];
+    const label = raw != null && String(raw).trim() !== '' ? String(raw).trim() : '—';
+    if (!map.has(label)) {
+      map.set(label, { acceptMs: [], completeMs: [] });
+    }
+    const b = map.get(label);
+    if (row.acceptDurationMs != null && Number.isFinite(row.acceptDurationMs) && row.acceptDurationMs >= 0) {
+      b.acceptMs.push(row.acceptDurationMs);
+    }
+    if (row.completeDurationMs != null && Number.isFinite(row.completeDurationMs) && row.completeDurationMs >= 0) {
+      b.completeMs.push(row.completeDurationMs);
+    }
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], 'ru'))
+    .map(([label, { acceptMs, completeMs }]) => ({
+      label,
+      avgAcceptLabel: formatDurationFromMs(averagePositiveMs(acceptMs)),
+      avgCompleteLabel: formatDurationFromMs(averagePositiveMs(completeMs)),
+    }));
+};
+
+const countReport4GroupRows = (group) => {
+  let n = 0;
+  const walk = (g) => {
+    if (!g?.items) {
+      return;
+    }
+    for (const child of g.items) {
+      if (child.type === 'group') {
+        walk(child);
+      } else if (child.raw) {
+        n++;
+      }
+    }
+  };
+  walk(group);
+  return n;
+};
+
+/** durationFact — минуты; timeSpentInLogs — секунды по журналу */
+const getTaskDurationMinutes = (task) => {
+  const df = Number(task?.durationFact);
+  if (Number.isFinite(df) && df > 0) {
+    return Math.round(df);
+  }
+  const sec = Number(task?.timeSpentInLogs);
+  if (Number.isFinite(sec) && sec > 0) {
+    return Math.round(sec / 60);
+  }
+  return 0;
+};
+
+const formatReport3CreatorName = (task) => {
+  const fromFields = `${task?.createdByLastName || ''} ${task?.createdByName || ''} ${task?.createdBySecondName || ''}`.trim();
+  if (fromFields) {
+    return fromFields;
+  }
+  const id = task?.createdBy;
+  if (id != null && id !== '') {
+    return `ID ${id}`;
+  }
+  return 'Без постановщика';
+};
+
+/** Сводка по постановщику для нового отчёта 6 (те же показатели, что у группы исполнителя в «Отчет по задачам») */
+const getReport3PostanovshikSummary = (responsibleName) => {
+  const userRows = newReportRows.value.filter((r) => r.responsibleName === responsibleName);
+  const totalTimeSpent = userRows.reduce((sum, r) => sum + (Number(r.durationMinutes || 0) / 60), 0);
+  const completedTasks = userRows.filter((t) => t.status == 5).length;
+  const inProgressTasks = userRows.filter((t) => t.status == 3).length;
+  const newTasks = userRows.filter((t) => t.status == 1 || t.status == 2).length;
+  return {
+    totalTasks: userRows.length,
+    completedTasks,
+    inProgressTasks,
+    newTasks,
+    totalTimeSpent: totalTimeSpent.toFixed(2),
+  };
+};
+
+/** Сводка по типу (отчёт 7): как блок показателей у постановщика в отчёте 3 */
+const getReport7TypeSummary = (taskType) => {
+  const userRows = newReportRows.value.filter((r) => r.taskType === taskType);
+  const totalAcceptHours = userRows.reduce(
+    (sum, r) => sum + Number(r.acceptDurationMs || 0) / 3600000,
+    0
+  );
+  const completedTasks = userRows.filter((t) => t.status == 5).length;
+  const inProgressTasks = userRows.filter((t) => t.status == 3).length;
+  const newTasks = userRows.filter((t) => t.status == 1 || t.status == 2).length;
+  return {
+    totalTasks: userRows.length,
+    completedTasks,
+    inProgressTasks,
+    newTasks,
+    totalAcceptHours: totalAcceptHours.toFixed(2),
+  };
+};
+
+/** Сумма трудозатрат в подгруппе по дате (часы, как в «Отчет по задачам») */
+const getReport3DateSubgroupDurationHours = (group) => {
+  const rows = [];
+  const walk = (g) => {
+    if (!g?.items) return;
+    for (const child of g.items) {
+      if (child.type === 'group') walk(child);
+      else if (child.raw) rows.push(child.raw);
+    }
+  };
+  walk(group);
+  const sumMin = rows.reduce((acc, r) => acc + Number(r.durationMinutes || 0), 0);
+  return (sumMin / 60).toFixed(2);
+};
+
+/** Сначала по периоду только id; полные поля — вторым запросом по ID (как в отчёте по задачам с UF) */
+const REPORT3_TASK_ID_SELECT = ['id'];
+
+const REPORT3_TASK_DETAIL_SELECT = [
+  'id',
+  'title',
+  'description',
+  'status',
+  'groupId',
+  'createdBy',
+  'createdByName',
+  'createdByLastName',
+  'createdBySecondName',
+  'createdDate',
+  'closedDate',
+  'durationFact',
+  'timeSpentInLogs',
+];
+
+/** Второй запрос только id + UF (в одном select с остальными полями REST часто не отдаёт UF; в JSON приходит ufAuto…). См. getTimeRecordsForExcel. */
+const REPORT_TASK_UF_SELECT = [
+  'id',
+  'UF_AUTO_256949663309',
+  'UF_AUTO_929760312277',
+  'UF_AUTO_207470266548',
+];
+
+const enrichTasksWithReportUserFields = async (tasks) => {
+  const list = Array.isArray(tasks) ? tasks : [];
+  if (!list.length) {
+    return list;
+  }
+  const taskIds = [...new Set(list.map((t) => t?.id).filter((id) => id != null))];
+  if (!taskIds.length) {
+    return list;
+  }
+  const ufBatch = await loadNewReportTasks({ ID: taskIds }, REPORT_TASK_UF_SELECT);
+  const ufRows = Array.isArray(ufBatch) ? ufBatch : [];
+  const byId = {};
+  ufRows.forEach((r) => {
+    if (r && r.id != null) {
+      byId[String(r.id)] = r;
+    }
+  });
+  return list.map((t) => {
+    const u = byId[String(t?.id)];
+    if (!u) {
+      return t;
+    }
+    return { ...t, ...u };
+  });
+};
+
+const enrichTasksWithCreatorNames = async (tasks) => {
+  const needIds = [
+    ...new Set(
+      tasks
+        .filter((t) => t && t.createdBy && !`${t.createdByName || ''}`.trim())
+        .map((t) => String(t.createdBy))
+    ),
+  ];
+  if (!needIds.length) {
+    return tasks;
+  }
+  let users = [];
+  try {
+    users = await callApi('user.get', { ID: needIds }, [], 0, 0, 0);
+  } catch (e) {
+    console.warn('user.get для постановщиков:', e);
+    return tasks;
+  }
+  const list = Array.isArray(users) ? users : [];
+  const byId = {};
+  list.forEach((u) => {
+    if (u && u.ID != null) {
+      byId[String(u.ID)] = u;
+    }
+  });
+  return tasks.map((t) => {
+    if (!t || !t.createdBy || `${t.createdByName || ''}`.trim()) {
+      return t;
+    }
+    const u = byId[String(t.createdBy)];
+    if (!u) {
+      return t;
+    }
+    return {
+      ...t,
+      createdByName: u.NAME || t.createdByName,
+      createdByLastName: u.LAST_NAME || t.createdByLastName,
+      createdBySecondName: u.SECOND_NAME || t.createdBySecondName,
+    };
+  });
+};
+
+const buildReport3 = async () => {
+  const { dateFrom, dateTo } = getNewReportDateRange();
+  const selectedDirections = new Set(newReportSelectedDirections.value);
+  const dateStart = `${dateFrom}T00:00:00+05:00`;
+  const dateEnd = `${dateTo}T23:59:59+05:00`;
+
+  const baseFilter = { GROUP_ID: NEW_REPORT_GROUP_ID };
+  const createdInPeriod = await loadNewReportTasks(
+    {
+      ...baseFilter,
+      '>=CREATED_DATE': dateStart,
+      '<=CREATED_DATE': dateEnd,
+    },
+    REPORT3_TASK_ID_SELECT
+  );
+  const closedInPeriod = await loadNewReportTasks(
+    {
+      ...baseFilter,
+      '>=CLOSED_DATE': dateStart,
+      '<=CLOSED_DATE': dateEnd,
+    },
+    REPORT3_TASK_ID_SELECT
+  );
+
+  const tasksById = new Map();
+  [...createdInPeriod, ...closedInPeriod].forEach((task) => {
+    if (task && task.id != null) {
+      tasksById.set(String(task.id), task);
+    }
+  });
+  const taskIdList = [...tasksById.keys()];
+  if (!taskIdList.length) {
+    newReportRows.value = [];
+    newReportSummary.value = {
+      completed: 0,
+      overdue: 0,
+      onTimePercent: 0,
+      report3DurationLabel: '—',
+      report4AvgAcceptLabel: '—',
+      report4AvgCompleteLabel: '—',
+      report4AvgByTaskType: [],
+      report4AvgByCategory: [],
+      text: 'За выбранный период задачи не найдены.',
+    };
+    return;
+  }
+
+  let tasksFull = await loadNewReportTasks({ ID: taskIdList }, REPORT3_TASK_DETAIL_SELECT);
+  let tasks = Array.isArray(tasksFull) ? tasksFull : [];
+  tasks = await enrichTasksWithReportUserFields(tasks);
+  tasks = await enrichTasksWithCreatorNames(tasks);
+
+  const linkedMap = await loadLinkedItemsByTaskIds(
+    tasks.map((task) => task.id),
+    {
+      '>=createdTime': dateStart,
+      '<=createdTime': dateEnd,
+    }
+  );
+
+  const rows = [];
+  let totalMinutes = 0;
+
+  tasks.forEach((task) => {
+    const direction = normalizeDirectionFromCategory(linkedMap[String(task.id)]?.categoryId);
+    if (selectedDirections.size && !selectedDirections.has(direction)) {
+      return;
+    }
+
+    const responsibleName = formatReport3CreatorName(task);
+    const durationMinutes = getTaskDurationMinutes(task);
+    totalMinutes += durationMinutes;
+    const hours = Math.floor(durationMinutes / 60);
+    const mins = durationMinutes % 60;
+
+    const department = taskUfDisplay(task, '256949663309');
+    const taskType = taskUfDisplay(task, '929760312277');
+    const category = taskUfDisplay(task, '207470266548');
+    const bodyText = stripHtmlForReport(getTaskDescriptionRaw(task));
+    const titleText = getTaskTitleRaw(task);
+    const taskDescriptionBody = bodyText
+      ? (bodyText.length > 500 ? `${bodyText.slice(0, 500)}…` : bodyText)
+      : '';
+    const taskDescriptionDisplay = [titleText, taskDescriptionBody].filter(Boolean).join('\n') || '—';
+
+    const createdRaw = getTaskCreatedRaw(task);
+    const createdMoment = createdRaw ? moment(createdRaw) : null;
+    const createdDateFormatted =
+      createdMoment && createdMoment.isValid() ? createdMoment.format('DD.MM.YYYY HH:mm') : '—';
+    const createdDateGroup =
+      createdMoment && createdMoment.isValid() ? createdMoment.format('YYYY-MM-DD') : '—';
+
+    rows.push({
+      id: String(task.id),
+      taskId: String(task.id),
+      title: titleText || '—',
+      taskDescriptionBody,
+      taskDescriptionDisplay,
+      taskUrl: `${getPortalUrl()}workgroups/group/${task.groupId || NEW_REPORT_GROUP_ID}/tasks/task/view/${task.id}/`,
+      responsibleName,
+      createdDateFormatted,
+      department,
+      taskType,
+      category,
+      status: task.status,
+      createdDateGroup,
+      durationMinutes,
+      durationLabel: durationMinutes > 0 ? `${hours} ч ${mins} мин` : '—',
+      direction,
+    });
+  });
+
+  rows.sort((a, b) => {
+    const nameCmp = String(a.responsibleName || '').localeCompare(String(b.responsibleName || ''), 'ru');
+    if (nameCmp !== 0) return nameCmp;
+    const dateCmp = String(b.createdDateGroup || '').localeCompare(String(a.createdDateGroup || ''));
+    if (dateCmp !== 0) return dateCmp;
+    return String(a.taskId).localeCompare(String(b.taskId), 'ru');
+  });
+
+  newReportRows.value = rows;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const totalMins = totalMinutes % 60;
+  const durationLabelTotal = `${totalHours} ч ${totalMins} мин`;
+  newReportSummary.value = {
+    completed: rows.length,
+    overdue: 0,
+    onTimePercent: 0,
+    report3DurationLabel: durationLabelTotal,
+    report4AvgAcceptLabel: '—',
+    report4AvgCompleteLabel: '—',
+    report4AvgByTaskType: [],
+    report4AvgByCategory: [],
+    text: `Задач: ${rows.length}. Итого суммарные трудозатраты: ${durationLabelTotal} (поле durationFact). Учитываются задачи с датой создания или датой завершения в периоде; статусы не фильтруются. Группировка: постановщик → дата создания (как в «Отчет по задачам»).`,
+  };
+};
+
+/** В select crm.item.list — только канонические имена полей */
+const LIFECYCLE_CRM_SELECT = ['ufCrm47_1700467583', 'ufCrm47_1700467615', 'ufCrm47_1700467652'];
+
+const buildReport4 = async () => {
+  const { dateFrom, dateTo } = getNewReportDateRange();
+  const selectedDirections = new Set(newReportSelectedDirections.value);
+  const dateStart = `${dateFrom}T00:00:00+05:00`;
+  const dateEnd = `${dateTo}T23:59:59+05:00`;
+
+  const baseFilter = { GROUP_ID: NEW_REPORT_GROUP_ID };
+  const createdInPeriod = await loadNewReportTasks(
+    {
+      ...baseFilter,
+      '>=CREATED_DATE': dateStart,
+      '<=CREATED_DATE': dateEnd,
+    },
+    REPORT3_TASK_ID_SELECT
+  );
+  const closedInPeriod = await loadNewReportTasks(
+    {
+      ...baseFilter,
+      '>=CLOSED_DATE': dateStart,
+      '<=CLOSED_DATE': dateEnd,
+    },
+    REPORT3_TASK_ID_SELECT
+  );
+
+  const tasksById = new Map();
+  [...createdInPeriod, ...closedInPeriod].forEach((task) => {
+    if (task && task.id != null) {
+      tasksById.set(String(task.id), task);
+    }
+  });
+  const taskIdList = [...tasksById.keys()];
+  if (!taskIdList.length) {
+    newReportRows.value = [];
+    newReportSummary.value = {
+      completed: 0,
+      overdue: 0,
+      onTimePercent: 0,
+      report3DurationLabel: '—',
+      report4AvgAcceptLabel: '—',
+      report4AvgCompleteLabel: '—',
+      report4AvgByTaskType: [],
+      report4AvgByCategory: [],
+      text: 'За выбранный период задачи не найдены.',
+    };
+    return;
+  }
+
+  let tasksFull = await loadNewReportTasks({ ID: taskIdList }, REPORT3_TASK_DETAIL_SELECT);
+  let tasks = Array.isArray(tasksFull) ? tasksFull : [];
+  tasks = await enrichTasksWithReportUserFields(tasks);
+
+  const linkedMap = await loadLinkedCrmItemsByTaskIds(taskIdList, LIFECYCLE_CRM_SELECT);
+
+  const rows = [];
+  const acceptMsList = [];
+  const completeMsList = [];
+
+  tasks.forEach((task) => {
+    const direction = normalizeDirectionFromCategory(linkedMap[String(task.id)]?.categoryId);
+    if (selectedDirections.size && !selectedDirections.has(direction)) {
+      return;
+    }
+
+    const taskType = taskUfDisplay(task, '929760312277');
+    const category = taskUfDisplay(task, '207470266548');
+    const bodyText = stripHtmlForReport(getTaskDescriptionRaw(task));
+    const titleText = getTaskTitleRaw(task);
+    const taskDescriptionBody = bodyText
+      ? (bodyText.length > 500 ? `${bodyText.slice(0, 500)}…` : bodyText)
+      : '';
+    const taskDescriptionDisplay = [titleText, taskDescriptionBody].filter(Boolean).join('\n') || '—';
+
+    const crmItem = linkedMap[String(task.id)];
+    const postanovkaRaw = pickCrmRaw(crmItem, LIFECYCLE_UF_POSTANOVKA, '1700467583');
+    const acceptRaw = pickCrmRaw(crmItem, LIFECYCLE_UF_ACCEPT, '1700467615');
+    const execRaw = pickCrmRaw(crmItem, LIFECYCLE_UF_EXEC, '1700467652');
+
+    const postanovkaM = postanovkaRaw ? moment(postanovkaRaw) : null;
+    const acceptM = acceptRaw ? moment(acceptRaw) : null;
+    const execM = execRaw ? moment(execRaw) : null;
+    const closedRaw = getTaskClosedRaw(task);
+    const closedM = closedRaw ? moment(closedRaw) : null;
+
+    const crmPostanovkaLabel =
+      postanovkaM && postanovkaM.isValid() ? postanovkaM.format('DD.MM.YYYY HH:mm') : '—';
+    const crmAcceptanceLabel =
+      acceptM && acceptM.isValid() ? acceptM.format('DD.MM.YYYY HH:mm') : '—';
+    const crmExecutionLabel = execM && execM.isValid() ? execM.format('DD.MM.YYYY HH:mm') : '—';
+    const taskClosedAtLabel =
+      closedM && closedM.isValid() ? closedM.format('DD.MM.YYYY HH:mm') : '—';
+
+    /** Срок принятия: дата/время принятия (CRM) − дата/время постановки (CRM), часы и минуты */
+    let acceptDurationMs = null;
+    if (
+      acceptM &&
+      postanovkaM &&
+      acceptM.isValid() &&
+      postanovkaM.isValid() &&
+      acceptM.valueOf() >= postanovkaM.valueOf()
+    ) {
+      acceptDurationMs = acceptM.diff(postanovkaM);
+      acceptMsList.push(acceptDurationMs);
+    }
+
+    /** Срок выполнения: CLOSED_DATE задачи − дата/время постановки (CRM), часы и минуты */
+    let completeDurationMs = null;
+    if (
+      closedM &&
+      postanovkaM &&
+      closedM.isValid() &&
+      postanovkaM.isValid() &&
+      closedM.valueOf() >= postanovkaM.valueOf()
+    ) {
+      completeDurationMs = closedM.diff(postanovkaM);
+      completeMsList.push(completeDurationMs);
+    }
+
+    rows.push({
+      id: String(task.id),
+      taskId: String(task.id),
+      status: task.status != null ? Number(task.status) : null,
+      title: titleText || '—',
+      taskDescriptionBody,
+      taskDescriptionDisplay,
+      taskUrl: `${getPortalUrl()}workgroups/group/${task.groupId || NEW_REPORT_GROUP_ID}/tasks/task/view/${task.id}/`,
+      taskType,
+      category,
+      crmPostanovkaLabel,
+      crmAcceptanceLabel,
+      crmExecutionLabel,
+      taskClosedAtLabel,
+      acceptDurationLabel: formatDurationFromMs(acceptDurationMs),
+      completeDurationLabel: formatDurationFromMs(completeDurationMs),
+      acceptDurationMs,
+      completeDurationMs,
+      direction,
+    });
+  });
+
+  rows.sort((a, b) => {
+    const t = String(a.taskType || '').localeCompare(String(b.taskType || ''), 'ru');
+    if (t !== 0) return t;
+    const c = String(a.category || '').localeCompare(String(b.category || ''), 'ru');
+    if (c !== 0) return c;
+    return String(a.taskId).localeCompare(String(b.taskId), 'ru');
+  });
+
+  newReportRows.value = rows;
+
+  const avgAccept = averagePositiveMs(acceptMsList);
+  const avgComplete = averagePositiveMs(completeMsList);
+  const avgAcceptLabel = formatDurationFromMs(avgAccept);
+  const avgCompleteLabel = formatDurationFromMs(avgComplete);
+  const report4AvgByTaskType = computeReport4AvgByField(rows, 'taskType');
+  const report4AvgByCategory = computeReport4AvgByField(rows, 'category');
+
+  newReportSummary.value = {
+    completed: rows.length,
+    overdue: 0,
+    onTimePercent: 0,
+    report3DurationLabel: '—',
+    report4AvgAcceptLabel: avgAcceptLabel,
+    report4AvgCompleteLabel: avgCompleteLabel,
+    report4AvgByTaskType,
+    report4AvgByCategory,
+    text:
+      `Группировка в таблице: тип задачи → категория. ` +
+      `Срок принятия в строке = дата принятия (CRM) − дата постановки (CRM). ` +
+      `Срок выполнения = CLOSED_DATE задачи − дата постановки (CRM). ` +
+      `Учитываются задачи с датой создания или завершения в периоде; направление — по заявке CRM.`,
+  };
+};
+
+const loadNewReport = async () => {
+  try {
+    newReportsLoading.value = true;
+    if (newReportTab.value === '1') {
+      await buildReport1();
+    } else if (newReportTab.value === '2') {
+      await buildReport2();
+    } else if (newReportTab.value === '4') {
+      await buildReport4();
+    } else {
+      await buildReport3();
+    }
+  } catch (error) {
+    console.error('Ошибка загрузки нового отчета:', error);
+    errorDisplay.value = 'Ошибка загрузки нового отчета';
+    errorDialog.value = true;
+  } finally {
+    newReportsLoading.value = false;
+  }
+};
+
+const getNewReportGroupSummary = (responsibleName) => {
+  const userRows = newReportRows.value.filter((row) => row.responsibleName === responsibleName);
+  const completed = userRows.length;
+  const overdue = userRows.filter((row) => row.onTime === false).length;
+  const onTime = completed - overdue;
+  const onTimePercent = completed ? Math.round((onTime / completed) * 1000) / 10 : 0;
+  const durationMinutes = userRows.reduce((acc, row) => acc + Number(row.durationMinutes || 0), 0);
+  const hours = Math.floor(durationMinutes / 60);
+  const mins = durationMinutes % 60;
+  return {
+    completed,
+    overdue,
+    onTimePercent,
+    durationLabel: `${hours} ч ${mins} мин`,
+  };
+};
+
+const exportNewReportToExcel = () => {
+  if (!newReportRows.value.length) {
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  let excelData = [];
+  let sheetTitle = `Отчет_${newReportTab.value}`;
+
+  if (newReportTab.value === '3') {
+    sheetTitle = 'Отчет_задачи_группа';
+    excelData = newReportRows.value.map((row) => ({
+      'Постановщик': row.responsibleName,
+      'Дата создания': row.createdDateFormatted,
+      'Подразделение постановщика': row.department,
+      'Тип задачи': row.taskType,
+      'Категория задачи': row.category,
+      'Описание задачи': row.taskDescriptionDisplay,
+      'Суммарные трудозатраты': row.durationLabel,
+      'Направление': row.direction,
+    }));
+  } else if (newReportTab.value === '4') {
+    sheetTitle = 'Отчет_жизненный_цикл';
+    excelData = newReportRows.value.map((row) => ({
+      'Тип': row.taskType,
+      'Категория': row.category,
+      'Описание задачи': row.taskDescriptionDisplay,
+      'Дата и время постановки задачи': row.crmPostanovkaLabel,
+      'Дата и время принятия задачи': row.crmAcceptanceLabel,
+      'Дата и время выполнения задачи': row.crmExecutionLabel,
+      'Дата и время закрытия задачи': row.taskClosedAtLabel,
+      'Срок принятия задачи': row.acceptDurationLabel,
+      'Срок выполнения задачи': row.completeDurationLabel,
+      'Направление': row.direction,
+    }));
+  } else {
+    sheetTitle = newReportTab.value === '2' ? 'Новый_Отчет_2' : 'Новый_Отчет_1';
+    excelData = newReportRows.value.map((row) => ({
+      [newReportTab.value === '2' ? 'Аналитик' : 'Исполнитель']: row.responsibleName,
+      [newReportTab.value === '2' ? 'Тикет' : 'Описание']: row.title,
+      [newReportTab.value === '2' ? 'SLA выполнен' : 'Закрыта в срок']: row.onTimeLabel,
+      [newReportTab.value === '2' ? 'Дата/Время приемки' : 'Дата закрытия']: row.closedDateLabel,
+      [newReportTab.value === '2' ? 'Дата создания' : 'Крайний срок']: row.deadlineLabel,
+      'Направление': row.direction,
+    }));
+  }
+
+  const ws = XLSX.utils.json_to_sheet(excelData);
+  // Колонка «Описание задачи»: отчёт 3 — индекс 5; отчёт 4 — индекс 2 (Тип, Категория, Описание)
+  const firstDataColumn = newReportTab.value === '3' ? 5 : newReportTab.value === '4' ? 2 : 1;
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  for (let rowIndex = range.s.r + 1; rowIndex <= range.e.r; rowIndex++) {
+    const cellAddress = XLSX.utils.encode_cell({ c: firstDataColumn, r: rowIndex });
+    if (!ws[cellAddress]) {
+      continue;
+    }
+    const source = newReportRows.value[rowIndex - 1];
+    if (!source?.taskUrl) {
+      continue;
+    }
+    ws[cellAddress].l = { Target: source.taskUrl, Tooltip: 'Открыть в Bitrix24' };
+    ws[cellAddress].s = { font: { color: { rgb: '0000FF' }, underline: true } };
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, sheetTitle);
+
+  const { dateFrom, dateTo } = getNewReportDateRange();
+  const summaryRows =
+    newReportTab.value === '3'
+      ? [
+          ['Отчет', 'Задачи по постановщикам (группировка: постановщик → дата создания)'],
+          ['Период', `${dateFrom} - ${dateTo}`],
+          ['Направления', newReportSelectedDirections.value.length ? newReportSelectedDirections.value.join(', ') : 'Все'],
+          ['Задач в отчёте', newReportSummary.value.completed],
+          ['Суммарные трудозатраты', newReportSummary.value.report3DurationLabel || '—'],
+          ['Комментарий', newReportSummary.value.text],
+        ]
+      : newReportTab.value === '4'
+        ? [
+            ['Отчет', 'Жизненный цикл задач (группировка: тип → категория)'],
+            ['Период', `${dateFrom} - ${dateTo}`],
+            ['Направления', newReportSelectedDirections.value.length ? newReportSelectedDirections.value.join(', ') : 'Все'],
+            ['Задач в отчёте', newReportSummary.value.completed],
+            ['Итог: среднее время принятия задачи', newReportSummary.value.report4AvgAcceptLabel || '—'],
+            ['Итог: среднее время выполнения задачи', newReportSummary.value.report4AvgCompleteLabel || '—'],
+            ['Комментарий', newReportSummary.value.text],
+            [],
+            ['Группировка: тип задачи', '', ''],
+            ['Тип задачи', 'Среднее время принятия', 'Среднее время выполнения'],
+            ...(newReportSummary.value.report4AvgByTaskType || []).map((r) => [
+              r.label,
+              r.avgAcceptLabel,
+              r.avgCompleteLabel,
+            ]),
+            [],
+            ['Группировка: категория', '', ''],
+            ['Категория', 'Среднее время принятия', 'Среднее время выполнения'],
+            ...(newReportSummary.value.report4AvgByCategory || []).map((r) => [
+              r.label,
+              r.avgAcceptLabel,
+              r.avgCompleteLabel,
+            ]),
+          ]
+        : [
+            ['Отчет', `Новый отчет ${newReportTab.value}`],
+            ['Период', `${dateFrom} - ${dateTo}`],
+            ['Направления', newReportSelectedDirections.value.length ? newReportSelectedDirections.value.join(', ') : 'Все'],
+            ['Ответственные', newReportSelectedResponsibles.value.length ? newReportSelectedResponsibles.value.join(', ') : 'Все'],
+            [newReportLabels.value.completed, newReportSummary.value.completed],
+            [newReportLabels.value.overdue, newReportSummary.value.overdue],
+            [newReportLabels.value.onTime, `${newReportSummary.value.onTimePercent}%`],
+            ['Комментарий', newReportSummary.value.text],
+          ];
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+  XLSX.utils.book_append_sheet(wb, summarySheet, 'Сводка');
+
+  XLSX.writeFile(wb, `Новые_отчеты_${newReportTab.value}_${moment().format('YYYY-MM-DD_HH-mm')}.xlsx`);
+};
 
 // Заголовки таблицы для детализированного отчета по задачам
 const tasksDetailedTableHeaders = ref([
@@ -2188,7 +3824,7 @@ const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
         moment(taskInfo.createdDate).format('DD.MM.YYYY HH:mm') : 'Не указана';
       const taskDeadline = taskInfo.deadline ? 
         moment(taskInfo.deadline).format('DD.MM.YYYY HH:mm') : 'Не указан';
-      console.log(taskInfo);
+
       return {
         recordCreatedDate: item.CREATED_DATE ? moment(item.CREATED_DATE).format('DD.MM.YYYY HH:mm:ss') : 'Не указана',
         userName: userName,
@@ -2588,6 +4224,15 @@ const openSelectedReport = () => {
 };
 
 const openReport = (reportId) => {
+  if (
+    (reportId === 4 || reportId === 5 || reportId === 6 || reportId === 7) &&
+    !canAccessReports4to7.value
+  ) {
+    errorDisplay.value = 'Доступ к этому отчёту ограничен.';
+    errorDialog.value = true;
+    return;
+  }
+
   reportsDialog.value = false;
   
   if (reportId === 1) {
@@ -2596,6 +4241,9 @@ const openReport = (reportId) => {
     report2Dialog.value = true;
   } else if (reportId === 3) {
     report3Dialog.value = true;
+  } else if (reportId === 4 || reportId === 5 || reportId === 6 || reportId === 7) {
+    newReportTab.value = String(reportId - 3);
+    newReportsDialog.value = true;
   }
 };
 
@@ -2604,6 +4252,7 @@ const backToReportsMenu = () => {
   report1Dialog.value = false;
   report2Dialog.value = false;
   report3Dialog.value = false;
+  newReportsDialog.value = false;
   reportsDialog.value = true;
 };
 const TASK_STATUS = {
@@ -2626,13 +4275,20 @@ const TASK_STATUS_LABELS = {
   [TASK_STATUS.STATE_DECLINED]: 'Отклонена'
 };
 
-// Заголовки таблицы задач
+// Заголовки таблицы задач (тот же порядок, что в exportTasksToExcel → excelData)
 const tasksTableHeaders = ref([
   { title: 'Наименование', value: 'title', sortable: true },
   { title: 'Статус', value: 'statusLabel', sortable: true },
   { title: 'Постановщик', value: 'creatorFullName', sortable: true },
-  { title: 'Исполнитель', value: 'responsibleFullName', sortable: true },
-  { title: 'Время', value: 'timeSpentInLogs', sortable: true },
+  { title: 'Исполнитель', value: 'originalResponsibleFullName', sortable: true },
+  { title: 'Время создания записи', value: 'recordCreatedDisplay', sortable: true },
+  { title: 'Затрачено времени (часы)', value: 'timeSpentInLogs', sortable: true },
+  { title: 'Комментарий', value: 'commentDisplay', sortable: true },
+  { title: 'Дата создания задачи', value: 'createdDateFormatted', sortable: true },
+  { title: 'Дедлайн', value: 'deadlineFormatted', sortable: true },
+  { title: 'Приоритет', value: 'priorityLabel', sortable: true },
+  { title: 'Пользователь (запись)', value: 'timeLogUserFullName', sortable: true },
+  { title: 'Тип обращения', value: 'taskTypeUfLabel', sortable: true },
 ]);
 const handleTasksData = async (tasks) => {
  try {
@@ -2702,26 +4358,50 @@ const handleTasksData = async (tasks) => {
         } else {
           tasksDetailedData = tasksDetailedData.concat(chunkData.tasks || []);
         }
+
+      let tasksUfRaw = await callApi(
+        'tasks.task.list',
+        { ID: uniqueTaskIds },
+        ['ID', 'UF_AUTO_929760312277']
+      );
+      let tasksUfList = [];
+      if (Array.isArray(tasksUfRaw)) {
+        tasksUfList = tasksUfRaw.reduce((acc, cur) => acc.concat(cur.tasks || []), []);
+      } else {
+        tasksUfList = tasksUfRaw.tasks || [];
+      }
+      tasksDetailedData = tasksDetailedData.map((t) => {
+        const extra = tasksUfList.find((u) => u && u.id === t.id);
+        return {
+          ...t,
+          taskTypeUfLabel: extra ? (extra.ufAuto929760312277 || extra.UF_AUTO_929760312277 || '') : '',
+        };
+      });
       }
     //}
 
-    // 4. Группируем записи времени по задачам и пользователям
+    // 4. Группируем записи времени по задачам и пользователям (секунды + даты создания записей)
     const taskTimeByUser = {};
-    
-    elapsedItems.forEach(item => {
+
+    elapsedItems.forEach((item) => {
       const taskId = item.TASK_ID;
       const userId = item.USER_ID.toString();
       const seconds = parseInt(item.SECONDS) || 0;
-      
+
       if (!taskTimeByUser[taskId]) {
         taskTimeByUser[taskId] = {};
       }
-      
+
       if (!taskTimeByUser[taskId][userId]) {
-        taskTimeByUser[taskId][userId] = 0;
+        taskTimeByUser[taskId][userId] = { totalSeconds: 0, recordDates: [] };
       }
-      
-      taskTimeByUser[taskId][userId] += seconds;
+
+      const bucket = taskTimeByUser[taskId][userId];
+      bucket.totalSeconds += seconds;
+      const createdRaw = item.CREATED_DATE ?? item.createdDate;
+      if (createdRaw) {
+        bucket.recordDates.push(createdRaw);
+      }
     });
 
     // 5. Формируем финальный массив данных для таблицы
@@ -2736,11 +4416,38 @@ const handleTasksData = async (tasks) => {
         status: 0,
         createdDate: null,
         deadline: null,
-        priority: 2
+        priority: 2,
+        taskTypeUfLabel: '',
       };
 
       // Создаем отдельную запись для каждого пользователя, который работал над задачей
-      Object.entries(timeRecords).forEach(([userId, totalSeconds]) => {
+      Object.entries(timeRecords).forEach(([userId, agg]) => {
+        const totalSeconds = agg.totalSeconds;
+        const recordDates = agg.recordDates || [];
+
+        const formatRecordCreatedDisplay = () => {
+          if (!recordDates.length) {
+            return 'Не указана';
+          }
+          const fmt = (d) => moment(d).format('DD.MM.YYYY HH:mm:ss');
+          if (recordDates.length === 1) {
+            return fmt(recordDates[0]);
+          }
+          const valid = recordDates
+            .map((d) => moment(d))
+            .filter((m) => m.isValid())
+            .sort((a, b) => a.valueOf() - b.valueOf());
+          if (!valid.length) {
+            return 'Не указана';
+          }
+          const first = valid[0];
+          const last = valid[valid.length - 1];
+          if (first.isSame(last)) {
+            return first.format('DD.MM.YYYY HH:mm:ss');
+          }
+          return `${first.format('DD.MM.YYYY HH:mm:ss')} — ${last.format('DD.MM.YYYY HH:mm:ss')}`;
+        };
+
         // Находим пользователя
         const workingUser = taskUsers.value.find(user => user.ID.toString() === userId);
 
@@ -2777,6 +4484,10 @@ const handleTasksData = async (tasks) => {
         // Форматируем даты
         const createdDateFormatted = task.createdDate ? 
           moment(task.createdDate).format('DD.MM.YYYY HH:mm') : 'Не указана';
+        const createdDateGroup = task.createdDate && moment(task.createdDate).isValid()
+          ? moment(task.createdDate).format('YYYY-MM-DD')
+          : '—';
+        const deadlineFormatted = task.deadline ? moment(task.deadline).format('DD.MM.YYYY HH:mm') : 'Не указан';
         
         // Конвертируем секунды в часы
         const timeSpentHours = Math.round((totalSeconds / 3600) * 100) / 100;
@@ -2791,9 +4502,15 @@ const handleTasksData = async (tasks) => {
           statusLabel,
           priorityLabel,
           createdDateFormatted,
+          createdDateGroup,
+          deadlineFormatted,
           timeSpentInLogs: timeSpentHours,
           timeSpentSeconds: totalSeconds,
-          originalResponsibleFullName: responsibleFullName, // Сохраняем оригинального ответственного
+          originalResponsibleFullName: responsibleFullName,
+          timeLogUserFullName: workingUserName,
+          recordCreatedDisplay: formatRecordCreatedDisplay(),
+          commentDisplay: '—',
+          taskTypeUfLabel: task.taskTypeUfLabel ?? '',
           isTimeContributor: true, // Флаг, что это запись о времени пользователя
           workingUserId: parseInt(userId), // ID пользователя, который работал над задачей
           uniqueKey: `${task.id}_${userId}` // Уникальный ключ для идентификации
@@ -2801,8 +4518,14 @@ const handleTasksData = async (tasks) => {
       });
     });
 
-    // Сортируем задачи по ID для удобства просмотра
-    finalTasksData.sort((a, b) => a.id - b.id);
+    // Сортировка: исполнитель → дата создания (новые сверху) → id
+    finalTasksData.sort((a, b) => {
+      const nameCmp = String(a.responsibleFullName || '').localeCompare(String(b.responsibleFullName || ''), 'ru');
+      if (nameCmp !== 0) return nameCmp;
+      const dateCmp = String(b.createdDateGroup || '').localeCompare(String(a.createdDateGroup || ''));
+      if (dateCmp !== 0) return dateCmp;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
 
     // Обновляем данные таблицы
     tasksTableDate.value = finalTasksData;
@@ -2881,6 +4604,49 @@ function formatTaskUserName(lastName, name, secondName) {
   
   return nameParts.length > 0 ? nameParts.join(' ') : 'Неизвестный пользователь';
 }
+
+/** Подпись для строки группы по дате (ключ YYYY-MM-DD) */
+const formatCreatedDateGroupHeader = (value) => {
+  if (value === undefined || value === null || value === '—') {
+    return 'не указана';
+  }
+  const m = moment(value, 'YYYY-MM-DD', true);
+  return m.isValid() ? m.format('DD.MM.YYYY') : String(value);
+};
+
+const collectTaskRowsFromDataTableGroup = (group) => {
+  const rows = [];
+  const walk = (g) => {
+    if (!g?.items) return;
+    for (const child of g.items) {
+      if (child.type === 'group') {
+        walk(child);
+      } else if (child.raw) {
+        rows.push(child.raw);
+      }
+    }
+  };
+  walk(group);
+  return rows;
+};
+
+const getDateSubgroupTaskCount = (group) => {
+  const rows = collectTaskRowsFromDataTableGroup(group);
+  return new Set(rows.map((r) => r.id)).size;
+};
+
+/** Подгруппа «категория» в отчёте 7: сумма сроков принятия (часы) */
+const getReport7CategoryAcceptHours = (group) => {
+  const rows = collectTaskRowsFromDataTableGroup(group);
+  const sumMs = rows.reduce((acc, r) => acc + Number(r.acceptDurationMs || 0), 0);
+  return (sumMs / 3600000).toFixed(2);
+};
+
+const getDateSubgroupTimeSpent = (group) => {
+  const rows = collectTaskRowsFromDataTableGroup(group);
+  const sum = rows.reduce((acc, r) => acc + (Number(r.timeSpentInLogs) || 0), 0);
+  return sum.toFixed(2);
+};
 
 // Функция для получения сводки по задачам исполнителя
 const getTaskSummary = (responsibleName) => {
@@ -2962,6 +4728,7 @@ const closeAllDialogs = () => {
   report1Dialog.value = false;
   report2Dialog.value = false;
   report3Dialog.value = false;
+  newReportsDialog.value = false;
   reportsDialog.value = false;
 };
 
@@ -2992,6 +4759,29 @@ watch(report3Dialog, (newVal) => {
       }
     });
   }
+});
+watch(newReportsDialog, async (newVal) => {
+  if (newVal && !newReportResponsibles.value.length) {
+    try {
+      await loadNewReportResponsibles();
+    } catch (error) {
+      console.error('Ошибка загрузки фильтров новых отчетов:', error);
+    }
+  }
+});
+watch(newReportTab, () => {
+  newReportRows.value = [];
+  newReportSummary.value = {
+    completed: 0,
+    overdue: 0,
+    onTimePercent: 0,
+    report3DurationLabel: '—',
+    report4AvgAcceptLabel: '—',
+    report4AvgCompleteLabel: '—',
+    report4AvgByTaskType: [],
+    report4AvgByCategory: [],
+    text: ''
+  };
 });
 // Сбрасываем выбор при закрытии диалога
 watch(reportsDialog, (newVal) => {
@@ -3179,4 +4969,5 @@ watch(reportsDialog, (newVal) => {
         
       .report-description
         font-size: 0.85rem
+
 </style>

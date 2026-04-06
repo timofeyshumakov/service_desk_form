@@ -4,30 +4,7 @@
         :selectedDateIso="selectedDateIso"
         :reportType="reportType"
     )
-    
-    //- Поле выбора типа задачи (только для задач)
-    v-autocomplete(
-        v-if="reportType === 'tasks'"
-        v-model="selectedTaskTypes"
-        :items="taskTypes"
-        label="Тип задачи"
-        single-line
-        hide-details
-        variant="outlined"
-        multiple
-        chips
-        clearable
-    )
-        template(v-slot:prepend-item)
-            v-list-item
-                v-list-item-content
-                    v-list-item-title
-                        v-checkbox(
-                            label="Выбрать все типы"
-                            :modelValue="selectAllTaskTypes"
-                            @change="toggleSelectAllTaskTypes()"
-                        )
-    
+
     //- Поле выбора сотрудников
     v-autocomplete(
         v-model="selectedUsers"
@@ -137,7 +114,6 @@ export default {
                 this.parseStore.setFilter(`>${dateField}`, this.selectedDateIso[0]);
                 this.parseStore.setFilter(`<${dateField}`, this.selectedDateIso[1]);
                 this.parseStore.setFilter("RESPONSIBLE_ID", this.selectedUsers);
-                this.parseStore.setFilter("GROUP_ID", 517);
                 this.$emit('update:selected-task-types', this.selectedTaskTypes);
             }
             sessionStorage.setItem("date", this.selectedDateIso);
