@@ -1,5 +1,6 @@
 <template>
   <v-app>
+    <div>{{ }}</div>
     <div v-if="isLoading" class="loading">Загрузка...</div>
     <v-main v-else>
       <v-container class="pa-8">
@@ -445,7 +446,7 @@
         </v-card>
       </v-dialog>
   <!-- Диалог выбора отчетов -->
-  <v-dialog v-model="reportsDialog" max-width="600">
+  <v-dialog v-model="reportsDialog">
     <v-card>
       <v-card-title class="success white--text d-flex justify-space-between align-center">
         Выбор отчета
@@ -568,6 +569,7 @@
                       </div>
                     </td>
                   </tr>
+                  <DataTableGroupHeaderRepeat :columns="columns" :show="isGroupOpen(item)" />
                 </template>
                 <template v-slot:item.title="{ item }">
                     <a 
@@ -625,7 +627,7 @@
           item-value="uniqueKey"
           :group-by="[
             { key: 'responsibleFullName', order: 'asc' },
-            { key: 'createdDateGroup', order: 'desc' },
+            { key: 'recordCreatedDateGroup', order: 'desc' },
           ]" 
           items-per-page="-1" 
           hide-default-footer
@@ -672,13 +674,14 @@
                 <div v-else class="tasks-date-subgroup d-flex align-center flex-wrap py-1">
                   <v-btn size="small" :icon="isGroupOpen(item) ? 'mdi-minus' : 'mdi-plus'" 
                         @click="toggleGroup(item)" class="toggle-btn"></v-btn>
-                  <span class="text-body-2 font-weight-medium">Дата создания: {{ formatCreatedDateGroupHeader(item.value) }}</span>
+                  <span class="text-body-2 font-weight-medium">{{ formatCreatedDateGroupHeader(item.value) }}</span>
                   <span class="text-caption text-medium-emphasis ml-2">
-                    задач: {{ getDateSubgroupTaskCount(item) }}, время: {{ getDateSubgroupTimeSpent(item) }} ч
+                    Записей: {{ getDateSubgroupTaskCount(item) }}, Время: {{ getDateSubgroupTimeSpent(item) }} ч
                   </span>
                 </div>
               </td>
             </tr>
+            <DataTableGroupHeaderRepeat :columns="columns" :show="isGroupOpen(item)" />
           </template>
           <template v-slot:item.title="{ item }">
                     <a :href="`https://ortonica.bitrix24.ru/company/personal/user/${currentUser}/tasks/task/view/${item.id}/`" target="_blank" class="task-link">
@@ -775,6 +778,7 @@
               </div>
             </td>
           </tr>
+          <DataTableGroupHeaderRepeat :columns="columns" :show="isGroupOpen(item)" />
         </template>
         
         <template v-slot:item.title="{ item }">
@@ -819,13 +823,6 @@
       </v-card-title>
 
       <v-card-text class="pa-6 text-center">
-        <v-tabs v-model="newReportTab" density="comfortable" color="primary">
-          <v-tab value="1">Отчет 1</v-tab>
-          <v-tab value="2">Отчет 2</v-tab>
-          <v-tab value="3">Отчет 3</v-tab>
-          <v-tab value="4">Жизненный цикл</v-tab>
-        </v-tabs>
-
         <NewReportsFilters
           v-model:selectedResponsibles="newReportSelectedResponsibles"
           v-model:selectedDirections="newReportSelectedDirections"
@@ -841,7 +838,7 @@
 
         <div class="new-report-summary mt-4">
           <v-row v-if="newReportTab === '3'">
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="6">
               <v-card variant="outlined">
                 <v-card-text>
                   <div class="text-caption">Задач в отчёте</div>
@@ -849,19 +846,11 @@
                 </v-card-text>
               </v-card>
             </v-col>
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="6">
               <v-card variant="outlined">
                 <v-card-text>
                   <div class="text-caption">Суммарные трудозатраты</div>
                   <div class="text-h5">{{ newReportSummary.report3DurationLabel }}</div>
-                </v-card-text>
-              </v-card>
-            </v-col>
-            <v-col cols="12" md="4">
-              <v-card variant="outlined">
-                <v-card-text>
-                  <div class="text-caption">Строк в таблице</div>
-                  <div class="text-h5">{{ newReportRows.length }}</div>
                 </v-card-text>
               </v-card>
             </v-col>
@@ -879,7 +868,9 @@
               <v-card variant="outlined">
                 <v-card-text>
                   <div class="text-caption">Среднее время принятия</div>
-                  <div class="text-h5">{{ newReportSummary.report4AvgAcceptLabel }}</div>
+                  <div class="text-h5" :class="report4AvgAcceptClass(newReportSummary.report4AvgAcceptMs)">
+                    {{ newReportSummary.report4AvgAcceptLabel }}
+                  </div>
                 </v-card-text>
               </v-card>
             </v-col>
@@ -893,7 +884,7 @@
             </v-col>
           </v-row>
           <v-row v-else>
-            <v-col cols="12" md="3">
+            <v-col cols="12" md="4">
               <v-card variant="outlined">
                 <v-card-text>
                   <div class="text-caption">{{ newReportLabels.completed }}</div>
@@ -901,7 +892,7 @@
                 </v-card-text>
               </v-card>
             </v-col>
-            <v-col cols="12" md="3">
+            <v-col cols="12" md="4">
               <v-card variant="outlined">
                 <v-card-text>
                   <div class="text-caption">{{ newReportLabels.overdue }}</div>
@@ -909,7 +900,7 @@
                 </v-card-text>
               </v-card>
             </v-col>
-            <v-col cols="12" md="3">
+            <v-col cols="12" md="4">
               <v-card variant="outlined">
                 <v-card-text>
                   <div class="text-caption">{{ newReportLabels.onTime }}</div>
@@ -917,16 +908,34 @@
                 </v-card-text>
               </v-card>
             </v-col>
-            <v-col cols="12" md="3">
-              <v-card variant="outlined">
-                <v-card-text>
-                  <div class="text-caption">Строк в отчете</div>
-                  <div class="text-h5">{{ newReportRows.length }}</div>
+          </v-row>
+          <div class="text-body-2 mt-2">{{ newReportSummary.text }}</div>
+        </div>
+
+        <div
+          v-if="newReportTab === '4' && newReportSummary.report4AvgByTaskType.length"
+          class="report4-task-type-cards text-left mt-2"
+        >
+          <div class="text-subtitle-2 mb-3">Группировка: тип задачи</div>
+          <v-row dense>
+            <v-col
+              v-for="row in newReportSummary.report4AvgByTaskType"
+              :key="'r4-tt-card-' + row.label"
+              cols="12"
+              sm="6"
+              md="3"
+            >
+              <v-card variant="outlined" class="report4-type-card h-100">
+                <v-card-title class="text-body-1 py-2">{{ row.label }}</v-card-title>
+                <v-card-text class="pt-0">
+                  <div class="text-caption text-medium-emphasis">Среднее время принятия</div>
+                  <div class="text-h6" :class="report4AvgAcceptClass(row.avgAcceptMs)">{{ row.avgAcceptLabel }}</div>
+                  <div class="text-caption text-medium-emphasis mt-3">Среднее время выполнения</div>
+                  <div class="text-body-1">{{ row.avgCompleteLabel }}</div>
                 </v-card-text>
               </v-card>
             </v-col>
           </v-row>
-          <div class="text-body-2 mt-2">{{ newReportSummary.text }}</div>
         </div>
 
         <v-data-table
@@ -961,6 +970,7 @@
                       <span class="stat-number">{{ getReport7TypeSummary(item.value).totalTasks }}</span>
                       <span class="stat-label">Всего задач</span>
                     </div>
+                    <!--
                     <div class="stat-item">
                       <span class="stat-number">{{ getReport7TypeSummary(item.value).completedTasks }}</span>
                       <span class="stat-label">Завершено</span>
@@ -973,6 +983,7 @@
                       <span class="stat-number">{{ getReport7TypeSummary(item.value).newTasks }}</span>
                       <span class="stat-label">Новые</span>
                     </div>
+                    -->
                     <div class="stat-item">
                       <span class="stat-number">{{ getReport7TypeSummary(item.value).totalAcceptHours }}</span>
                       <span class="stat-label">Σ срок принятия, ч</span>
@@ -1066,10 +1077,21 @@
                 </div>
               </td>
             </tr>
+            <DataTableGroupHeaderRepeat :columns="columns" :show="isGroupOpen(item)" />
           </template>
 
           <template v-slot:item.title="{ item }">
             <a :href="item.taskUrl" target="_blank" class="task-link">{{ item.title }}</a>
+          </template>
+          <template v-slot:item.onTimeLabel="{ item }">
+            <span
+              v-if="newReportTab === '1'"
+              class="font-weight-medium"
+              :class="item.onTime ? 'text-success' : 'text-error'"
+            >
+              {{ item.onTimeLabel }}
+            </span>
+            <span v-else>{{ item.onTimeLabel }}</span>
           </template>
           <template v-slot:item.taskDescriptionDisplay="{ item }">
             <div v-if="newReportTab === '3' || newReportTab === '4'" class="report3-desc-cell">
@@ -1088,27 +1110,6 @@
           </div>
 
           <div class="mb-4">
-            <div class="font-weight-medium mb-2">Группировка: тип задачи</div>
-            <v-table v-if="newReportSummary.report4AvgByTaskType.length" density="compact" class="report4-avg-table border rounded">
-              <thead>
-                <tr>
-                  <th class="text-left">Тип задачи</th>
-                  <th class="text-left">Среднее время принятия</th>
-                  <th class="text-left">Среднее время выполнения</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in newReportSummary.report4AvgByTaskType" :key="'r4-tt-' + row.label">
-                  <td>{{ row.label }}</td>
-                  <td>{{ row.avgAcceptLabel }}</td>
-                  <td>{{ row.avgCompleteLabel }}</td>
-                </tr>
-              </tbody>
-            </v-table>
-            <div v-else class="text-body-2 text-medium-emphasis">Нет данных для расчёта по типам.</div>
-          </div>
-
-          <div class="mb-4">
             <div class="font-weight-medium mb-2">Группировка: категория</div>
             <v-table v-if="newReportSummary.report4AvgByCategory.length" density="compact" class="report4-avg-table border rounded">
               <thead>
@@ -1121,7 +1122,9 @@
               <tbody>
                 <tr v-for="row in newReportSummary.report4AvgByCategory" :key="'r4-cat-' + row.label">
                   <td>{{ row.label }}</td>
-                  <td>{{ row.avgAcceptLabel }}</td>
+                  <td>
+                    <span :class="report4AvgAcceptClass(row.avgAcceptMs)">{{ row.avgAcceptLabel }}</span>
+                  </td>
                   <td>{{ row.avgCompleteLabel }}</td>
                 </tr>
               </tbody>
@@ -1132,7 +1135,12 @@
           <div>
             <div class="font-weight-medium mb-2">Итоги</div>
             <ul class="pl-6 mb-0 text-body-2">
-              <li>Среднее время принятия задачи: {{ newReportSummary.report4AvgAcceptLabel }}</li>
+              <li>
+                Среднее время принятия задачи:
+                <span :class="report4AvgAcceptClass(newReportSummary.report4AvgAcceptMs)">{{
+                  newReportSummary.report4AvgAcceptLabel
+                }}</span>
+              </li>
               <li>Среднее время выполнения задачи: {{ newReportSummary.report4AvgCompleteLabel }}</li>
             </ul>
           </div>
@@ -1147,6 +1155,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import TheForm from '../components/TheForm/TheForm.vue';
 import NewReportsFilters from '../components/TheForm/NewReportsFilters.vue';
+import DataTableGroupHeaderRepeat from '../components/DataTableGroupHeaderRepeat.vue';
 import moment from 'moment';
 import { callApi, getTaskElapsedItems } from '../functions/callApi';
 import * as XLSX from 'xlsx';
@@ -2269,6 +2278,10 @@ onMounted(async() => {
       loadTaskUsers(),
       loadSubcategoryOptions(),
     ]);
+
+BX24.init(function () {
+    const domain = BX24.getDomain();
+});
 await new Promise((resolve) => {
 BX24.callMethod(
     "user.current",
@@ -2371,39 +2384,39 @@ const reports = ref([
     description: 'Детальная статистика по заявкам ИТ категории',
     icon: 'mdi-chart-pie'
   },
-  {
-    id: 2,
-    title: 'Затраченное время по задачам',
-    description: 'Затраченное время на задачи по ответственному',
-    icon: 'mdi-clock-outline'
-  },
-  {
+    {
     id: 3,
-    title: 'Отчет по задачам категории ИТ',
+    title: '3. Отчет по задачам категории ИТ',
     description: 'Количество задач и затраченное время с фильтрами',
     icon: 'mdi-chart-bar'
   },
   {
     id: 4,
-    title: 'Отчет по просроченным задачам',
+    title: '1. Отчет по просроченным задачам',
     description: 'Выполненные задачи с SLA и направлениями',
     icon: 'mdi-view-dashboard-outline'
   },
   {
     id: 5,
-    title: 'Отчет по приему задач-тиĸетов',
+    title: '2. Отчет по приему задач-тиĸетов',
     description: 'Принятые тикеты с SLA по направлениям',
     icon: 'mdi-ticket-confirmation-outline'
   },
   {
+    id: 2,
+    title: '3. Отчет по затраченному времени',
+    description: 'Затраченное время на задачи по ответственному',
+    icon: 'mdi-clock-outline'
+  },
+  {
     id: 6,
-    title: 'Отчт по поставленным и выполненным задачам',
+    title: '4. Отчт по поставленным и выполненным задачам',
     description: 'Трудозатраты по постановщикам и типам',
     icon: 'mdi-chart-timeline-variant'
   },
   {
     id: 7,
-    title: 'Жизненный цикл задач',
+    title: '5. Отчет по жизненному циĸлу задач',
     description: 'Тип, категория, сроки по задаче и элементу смарт-процесса',
     icon: 'mdi-timeline-clock-outline'
   }
@@ -2415,10 +2428,12 @@ const canAccessReports4to7 = computed(() =>
 
 /** Карточки отчётов 4–7 скрыты, если пользователь не в белом списке */
 const visibleReports = computed(() => {
+  const hiddenReportIds = new Set([1, 3]);
+  const baseReports = reports.value.filter((r) => !hiddenReportIds.has(r.id));
   if (canAccessReports4to7.value) {
-    return reports.value;
+    return baseReports;
   }
-  return reports.value.filter((r) => r.id <= 3);
+  return baseReports.filter((r) => r.id <= 3);
 });
 
 const report3Dialog = ref(false);
@@ -2447,6 +2462,7 @@ const newReportSummary = ref({
   onTimePercent: 0,
   report3DurationLabel: '—',
   report4AvgAcceptLabel: '—',
+  report4AvgAcceptMs: null,
   report4AvgCompleteLabel: '—',
   report4AvgByTaskType: [],
   report4AvgByCategory: [],
@@ -2454,7 +2470,15 @@ const newReportSummary = ref({
 });
 
 const newReportDateShowInput = ref([false, false, false, false, false, false, false]);
-const newReportSelectedDateIso = ref([null, null]);
+
+/** Как в Date.vue (пресет «Текущая неделя») — единый дефолт периода для новых отчётов */
+const getIsoRangeForCurrentWeek = () => {
+  const d0 = moment().startOf('week').add(1, 'days');
+  const d1 = moment().endOf('week').add(36, 'hours');
+  return [d0.clone().subtract(12, 'hours').toISOString(), d1.clone().add(12, 'hours').toISOString()];
+};
+
+const newReportSelectedDateIso = ref(getIsoRangeForCurrentWeek());
 
 const onNewReportDateSend = (value) => {
   if (!Array.isArray(value)) {
@@ -2522,16 +2546,14 @@ const newReportHeaders = computed(() => {
 
 const newReportTableGroupBy = computed(() => {
   if (newReportTab.value === '3') {
-    // Как в «Отчет по задачам»: постановщик → дата создания
+    // Группировка по постановщику
     return [
       { key: 'responsibleName', order: 'asc' },
-      { key: 'createdDateGroup', order: 'desc' },
     ];
   }
   if (newReportTab.value === '4') {
     return [
       { key: 'taskType', order: 'asc' },
-      { key: 'category', order: 'asc' },
     ];
   }
   return [{ key: 'responsibleName', order: 'asc' }];
@@ -2568,14 +2590,24 @@ const getNewReportDateRange = () => {
 
   const rawRange = sessionStorage.getItem('date') || '';
   if (!rawRange) {
-    const now = moment();
-    return { dateFrom: now.clone().startOf('month').format('YYYY-MM-DD'), dateTo: now.format('YYYY-MM-DD') };
+    const [a, b] = getIsoRangeForCurrentWeek();
+    const fromM = moment(a);
+    const toM = moment(b);
+    return {
+      dateFrom: fromM.format('YYYY-MM-DD'),
+      dateTo: toM.format('YYYY-MM-DD'),
+    };
   }
 
   const commaIdx = rawRange.indexOf(',');
   if (commaIdx === -1) {
-    const now = moment();
-    return { dateFrom: now.clone().startOf('month').format('YYYY-MM-DD'), dateTo: now.format('YYYY-MM-DD') };
+    const [a, b] = getIsoRangeForCurrentWeek();
+    const fromM = moment(a);
+    const toM = moment(b);
+    return {
+      dateFrom: fromM.format('YYYY-MM-DD'),
+      dateTo: toM.format('YYYY-MM-DD'),
+    };
   }
   const rawFrom = rawRange.slice(0, commaIdx).trim();
   const rawTo = rawRange.slice(commaIdx + 1).trim();
@@ -2589,8 +2621,13 @@ const getNewReportDateRange = () => {
     return { dateFrom: from, dateTo: to };
   }
 
-  const now = moment();
-  return { dateFrom: now.clone().startOf('month').format('YYYY-MM-DD'), dateTo: now.format('YYYY-MM-DD') };
+  const [a, b] = getIsoRangeForCurrentWeek();
+  const fromM = moment(a);
+  const toM = moment(b);
+  return {
+    dateFrom: fromM.format('YYYY-MM-DD'),
+    dateTo: toM.format('YYYY-MM-DD'),
+  };
 };
 
 const normalizeDirectionFromCategory = (categoryId) => {
@@ -2709,7 +2746,24 @@ const getSlaEnumMap = () => {
   }, {});
 };
 
-const getPortalUrl = () => `${window.location.origin}/`;
+/** Базовый URL портала Bitrix24; в приложении из BX24 — иначе origin окна */
+const getPortalUrl = () => {
+  try {
+    if (typeof BX24 !== 'undefined' && typeof BX24.getDomain === 'function') {
+      const domain = BX24.getDomain();
+      const host = String(domain ?? '')
+        .trim()
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/+$/, '');
+      if (host) {
+        return `https://${host}/`;
+      }
+    }
+  } catch {
+    /* BX24 недоступен (тесты / вне iframe) */
+  }
+  return `${window.location.origin}/`;
+};
 
 const buildReport1 = async () => {
   const { dateFrom, dateTo } = getNewReportDateRange();
@@ -2792,6 +2846,7 @@ const buildReport1 = async () => {
     onTimePercent,
     report3DurationLabel: '—',
     report4AvgAcceptLabel: '—',
+    report4AvgAcceptMs: null,
     report4AvgCompleteLabel: '—',
     report4AvgByTaskType: [],
     report4AvgByCategory: [],
@@ -2863,6 +2918,7 @@ const buildReport2 = async () => {
     onTimePercent,
     report3DurationLabel: '—',
     report4AvgAcceptLabel: '—',
+    report4AvgAcceptMs: null,
     report4AvgCompleteLabel: '—',
     report4AvgByTaskType: [],
     report4AvgByCategory: [],
@@ -2988,6 +3044,16 @@ const averagePositiveMs = (values) => {
   return valid.reduce((a, b) => a + b, 0) / valid.length;
 };
 
+/** Порог для окраски «Среднее время принятия»: до 2 ч включ. — зелёный, иначе красный */
+const REPORT4_ACCEPT_SLA_MS = 2 * 60 * 60 * 1000;
+
+const report4AvgAcceptClass = (avgAcceptMs) => {
+  if (avgAcceptMs == null || !Number.isFinite(avgAcceptMs)) {
+    return '';
+  }
+  return avgAcceptMs <= REPORT4_ACCEPT_SLA_MS ? 'text-success' : 'text-error';
+};
+
 /** Средние по acceptDurationMs / completeDurationMs для отчёта «Жизненный цикл» (группировка в таблице — другая величина) */
 const computeReport4AvgByField = (rows, field) => {
   const map = new Map();
@@ -3007,11 +3073,16 @@ const computeReport4AvgByField = (rows, field) => {
   }
   return [...map.entries()]
     .sort((a, b) => a[0].localeCompare(b[0], 'ru'))
-    .map(([label, { acceptMs, completeMs }]) => ({
-      label,
-      avgAcceptLabel: formatDurationFromMs(averagePositiveMs(acceptMs)),
-      avgCompleteLabel: formatDurationFromMs(averagePositiveMs(completeMs)),
-    }));
+    .map(([label, { acceptMs, completeMs }]) => {
+      const avgAcceptMs = averagePositiveMs(acceptMs);
+      const avgCompleteMs = averagePositiveMs(completeMs);
+      return {
+        label,
+        avgAcceptMs,
+        avgAcceptLabel: formatDurationFromMs(avgAcceptMs),
+        avgCompleteLabel: formatDurationFromMs(avgCompleteMs),
+      };
+    });
 };
 
 const countReport4GroupRows = (group) => {
@@ -3241,6 +3312,7 @@ const buildReport3 = async () => {
       onTimePercent: 0,
       report3DurationLabel: '—',
       report4AvgAcceptLabel: '—',
+      report4AvgAcceptMs: null,
       report4AvgCompleteLabel: '—',
       report4AvgByTaskType: [],
       report4AvgByCategory: [],
@@ -3332,6 +3404,7 @@ const buildReport3 = async () => {
     onTimePercent: 0,
     report3DurationLabel: durationLabelTotal,
     report4AvgAcceptLabel: '—',
+    report4AvgAcceptMs: null,
     report4AvgCompleteLabel: '—',
     report4AvgByTaskType: [],
     report4AvgByCategory: [],
@@ -3381,6 +3454,7 @@ const buildReport4 = async () => {
       onTimePercent: 0,
       report3DurationLabel: '—',
       report4AvgAcceptLabel: '—',
+      report4AvgAcceptMs: null,
       report4AvgCompleteLabel: '—',
       report4AvgByTaskType: [],
       report4AvgByCategory: [],
@@ -3504,14 +3578,12 @@ const buildReport4 = async () => {
     onTimePercent: 0,
     report3DurationLabel: '—',
     report4AvgAcceptLabel: avgAcceptLabel,
+    report4AvgAcceptMs: avgAccept,
     report4AvgCompleteLabel: avgCompleteLabel,
     report4AvgByTaskType,
     report4AvgByCategory,
     text:
-      `Группировка в таблице: тип задачи → категория. ` +
-      `Срок принятия в строке = дата принятия (CRM) − дата постановки (CRM). ` +
-      `Срок выполнения = CLOSED_DATE задачи − дата постановки (CRM). ` +
-      `Учитываются задачи с датой создания или завершения в периоде; направление — по заявке CRM.`,
+      ``,
   };
 };
 
@@ -3623,7 +3695,7 @@ const exportNewReportToExcel = () => {
   const summaryRows =
     newReportTab.value === '3'
       ? [
-          ['Отчет', 'Задачи по постановщикам (группировка: постановщик → дата создания)'],
+          ['Отчет', 'Задачи по постановщикам (группировка: постановщик)'],
           ['Период', `${dateFrom} - ${dateTo}`],
           ['Направления', newReportSelectedDirections.value.length ? newReportSelectedDirections.value.join(', ') : 'Все'],
           ['Задач в отчёте', newReportSummary.value.completed],
@@ -3632,7 +3704,7 @@ const exportNewReportToExcel = () => {
         ]
       : newReportTab.value === '4'
         ? [
-            ['Отчет', 'Жизненный цикл задач (группировка: тип → категория)'],
+            ['Отчет', 'Жизненный цикл задач (группировка: тип)'],
             ['Период', `${dateFrom} - ${dateTo}`],
             ['Направления', newReportSelectedDirections.value.length ? newReportSelectedDirections.value.join(', ') : 'Все'],
             ['Задач в отчёте', newReportSummary.value.completed],
@@ -3987,17 +4059,27 @@ const handleDetailedTasksData = async (tasks) => {
 
     // Создаем фильтр для временных записей
     const timeFilter = {};
-    if (filteredDate.length >= 2) {
-      timeFilter['>=CREATED_DATE'] = filteredDate[0].split("T")[0];
-      timeFilter['<=CREATED_DATE'] = filteredDate[1].split("T")[0];
+    let dateFromStr;
+    let dateToStr;
+    if (filteredDate.length >= 2 && filteredDate[0] && filteredDate[1]) {
+      dateFromStr = filteredDate[0].split('T')[0];
+      dateToStr = filteredDate[1].split('T')[0];
     } else {
-      // Значения по умолчанию, если даты не установлены
-      timeFilter['>=CREATED_DATE'] = "2025-08-01";
-      timeFilter['<=CREATED_DATE'] = "2025-09-01";
+      const [a, b] = getIsoRangeForCurrentWeek();
+      dateFromStr = moment(a).format('YYYY-MM-DD');
+      dateToStr = moment(b).format('YYYY-MM-DD');
+    }
+    timeFilter['>=CREATED_DATE'] = dateFromStr;
+    timeFilter['<=CREATED_DATE'] = dateToStr;
+
+    const selectedUsersRaw = sessionStorage.getItem('selectedUsers');
+    const elapsedFilter = { ...timeFilter };
+    if (selectedUsersRaw && selectedUsersRaw !== '') {
+      elapsedFilter.USER_ID = selectedUsersRaw.split(',');
     }
 
     const elapsedItems = await getTaskElapsedItems(
-      {'>=CREATED_DATE': filteredDate[0].split("T")[0], '<=CREATED_DATE': filteredDate[1].split("T")[0], "USER_ID": sessionStorage.getItem("selectedUsers").split(",")},
+      elapsedFilter,
       ['ID', 'TASK_ID', "SECONDS", "USER_ID", "CREATED_DATE"], 
       ''
     );
@@ -4299,14 +4381,18 @@ const handleTasksData = async (tasks) => {
 
     // Создаем фильтр для временных записей за период
     const timeFilter = {};
-    if (filteredDate.length >= 2) {
-      timeFilter['>=CREATED_DATE'] = filteredDate[0].split("T")[0];
-      timeFilter['<=CREATED_DATE'] = filteredDate[1].split("T")[0];
+    let dateFromStr;
+    let dateToStr;
+    if (filteredDate.length >= 2 && filteredDate[0] && filteredDate[1]) {
+      dateFromStr = filteredDate[0].split('T')[0];
+      dateToStr = filteredDate[1].split('T')[0];
     } else {
-      // Значения по умолчанию, если даты не установлены
-      timeFilter['>=CREATED_DATE'] = "2025-08-01";
-      timeFilter['<=CREATED_DATE'] = "2025-09-01";
+      const [a, b] = getIsoRangeForCurrentWeek();
+      dateFromStr = moment(a).format('YYYY-MM-DD');
+      dateToStr = moment(b).format('YYYY-MM-DD');
     }
+    timeFilter['>=CREATED_DATE'] = dateFromStr;
+    timeFilter['<=CREATED_DATE'] = dateToStr;
 
     // Получаем выбранных пользователей из фильтра
     const selectedUsers = sessionStorage.getItem("selectedUsers")?.split(",") || [];
@@ -4424,6 +4510,10 @@ const handleTasksData = async (tasks) => {
       Object.entries(timeRecords).forEach(([userId, agg]) => {
         const totalSeconds = agg.totalSeconds;
         const recordDates = agg.recordDates || [];
+        const validRecordDates = recordDates
+          .map((d) => moment(d))
+          .filter((m) => m.isValid())
+          .sort((a, b) => a.valueOf() - b.valueOf());
 
         const formatRecordCreatedDisplay = () => {
           if (!recordDates.length) {
@@ -4433,15 +4523,11 @@ const handleTasksData = async (tasks) => {
           if (recordDates.length === 1) {
             return fmt(recordDates[0]);
           }
-          const valid = recordDates
-            .map((d) => moment(d))
-            .filter((m) => m.isValid())
-            .sort((a, b) => a.valueOf() - b.valueOf());
-          if (!valid.length) {
+          if (!validRecordDates.length) {
             return 'Не указана';
           }
-          const first = valid[0];
-          const last = valid[valid.length - 1];
+          const first = validRecordDates[0];
+          const last = validRecordDates[validRecordDates.length - 1];
           if (first.isSame(last)) {
             return first.format('DD.MM.YYYY HH:mm:ss');
           }
@@ -4484,8 +4570,8 @@ const handleTasksData = async (tasks) => {
         // Форматируем даты
         const createdDateFormatted = task.createdDate ? 
           moment(task.createdDate).format('DD.MM.YYYY HH:mm') : 'Не указана';
-        const createdDateGroup = task.createdDate && moment(task.createdDate).isValid()
-          ? moment(task.createdDate).format('YYYY-MM-DD')
+        const recordCreatedDateGroup = validRecordDates.length
+          ? validRecordDates[0].format('YYYY-MM-DD')
           : '—';
         const deadlineFormatted = task.deadline ? moment(task.deadline).format('DD.MM.YYYY HH:mm') : 'Не указан';
         
@@ -4502,7 +4588,7 @@ const handleTasksData = async (tasks) => {
           statusLabel,
           priorityLabel,
           createdDateFormatted,
-          createdDateGroup,
+          recordCreatedDateGroup,
           deadlineFormatted,
           timeSpentInLogs: timeSpentHours,
           timeSpentSeconds: totalSeconds,
@@ -4518,11 +4604,11 @@ const handleTasksData = async (tasks) => {
       });
     });
 
-    // Сортировка: исполнитель → дата создания (новые сверху) → id
+    // Сортировка: исполнитель → дата создания записи (новые сверху) → id
     finalTasksData.sort((a, b) => {
       const nameCmp = String(a.responsibleFullName || '').localeCompare(String(b.responsibleFullName || ''), 'ru');
       if (nameCmp !== 0) return nameCmp;
-      const dateCmp = String(b.createdDateGroup || '').localeCompare(String(a.createdDateGroup || ''));
+      const dateCmp = String(b.recordCreatedDateGroup || '').localeCompare(String(a.recordCreatedDateGroup || ''));
       if (dateCmp !== 0) return dateCmp;
       return (Number(a.id) || 0) - (Number(b.id) || 0);
     });
@@ -4777,6 +4863,7 @@ watch(newReportTab, () => {
     onTimePercent: 0,
     report3DurationLabel: '—',
     report4AvgAcceptLabel: '—',
+    report4AvgAcceptMs: null,
     report4AvgCompleteLabel: '—',
     report4AvgByTaskType: [],
     report4AvgByCategory: [],
@@ -4927,6 +5014,11 @@ watch(reportsDialog, (newVal) => {
     color: black
 
   .reports-menu
+    display: grid
+    grid-template-columns: 1fr 1fr
+    column-gap: 1rem
+
+  .reports-menu
     .report-card
       border: 2px solid #e0e0e0
       border-radius: 12px
@@ -4956,6 +5048,10 @@ watch(reportsDialog, (newVal) => {
       font-size: 0.9rem
       color: #666
       margin: 0
+
+  .report4-task-type-cards .v-card-text
+    gap: 0
+
 
   // Адаптивность для мобильных устройств
   @media (max-width: 600px)

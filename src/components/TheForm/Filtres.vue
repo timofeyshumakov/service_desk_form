@@ -146,15 +146,14 @@ export default {
                 }));
                 
                 this.userIds = formattedUsers.map(u => u.ID);
-                // Выбираем только пользователей, которые не в списке исключенных
-                this.selectedUsers = this.userIds.filter(id => !this.excludedUserIds.includes(id));
+                this.selectedUsers = [...this.userIds];
                 this.$emit('update:users', formattedUsers);
                 
             } catch (error) {
                 console.error('Ошибка загрузки пользователей:', error);
                 // Используем переданных пользователей как fallback
                 this.userIds = this.users.map(u => u.ID);
-                this.selectedUsers = this.userIds.filter(id => !this.excludedUserIds.includes(id));
+                this.selectedUsers = [...this.userIds];
             } finally {
                 this.loadingUsers = false;
             }
@@ -165,8 +164,7 @@ export default {
                 this.selectedAllUsers = false;
                 this.selectedUsers = [];
             }else{
-                // Выбираем всех доступных пользователей (без исключенных)
-                this.selectedUsers = [...this.availableUserIds];
+                this.selectedUsers = [...this.userIds];
                 this.selectedAllUsers = true;
             }
         },
@@ -206,9 +204,8 @@ export default {
             this.filterUsers = newUsers;
             this.userIds = newUsers.map(u => u.ID);
             
-            // Автоматически выбираем всех доступных пользователей (без исключенных) при загрузке
             if (this.selectedAllUsers) {
-                this.selectedUsers = this.userIds.filter(id => !this.excludedUserIds.includes(id));
+                this.selectedUsers = [...this.userIds];
             }
         },
         selectedBranches(value){
@@ -220,16 +217,14 @@ export default {
         reportType(newType) {
             // При смене типа отчета используем соответствующих пользователей
             if (newType === 'tasks') {
-                // Для задач используем переданных пользователей
                 this.filterUsers = this.users;
                 this.userIds = this.users.map(u => u.ID);
-                this.selectedUsers = this.userIds.filter(id => !this.excludedUserIds.includes(id));
+                this.selectedUsers = [...this.userIds];
                 this.selectedAllUsers = true;
             } else {
-                // Для заявок используем переданных пользователей
                 this.filterUsers = this.users;
                 this.userIds = this.users.map(u => u.ID);
-                this.selectedUsers = this.userIds.filter(id => !this.excludedUserIds.includes(id));
+                this.selectedUsers = [...this.userIds];
                 this.selectedAllUsers = true;
             }
         },

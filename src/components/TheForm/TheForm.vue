@@ -170,10 +170,18 @@ const submit = async () => {
   myStore.clearItems()
   parseStore.deleteParsedBatches()
 
+  // Отчёт по задачам (id карточки в меню — 2): без ограничения по рабочей группе
+  let apiFilter = parseStore.filter
+  if (props.reportType === 'tasks') {
+    apiFilter = { ...parseStore.filter }
+    delete apiFilter.GROUP_ID
+    delete apiFilter.group_id
+  }
+
   // Вызываем API с соответствующими параметрами
   responseData = await callApi(
     entitySettings.entity,
-    parseStore.filter,
+    apiFilter,
     parseStore.select,
     172,
     0,
