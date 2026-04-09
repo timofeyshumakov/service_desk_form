@@ -1,6 +1,5 @@
 <template>
   <v-app>
-    <div>{{ }}</div>
     <div v-if="isLoading" class="loading">Загрузка...</div>
     <v-main v-else>
       <v-container class="pa-8">
