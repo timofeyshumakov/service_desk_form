@@ -826,9 +826,11 @@
         <NewReportsFilters
           v-model:selectedResponsibles="newReportSelectedResponsibles"
           v-model:selectedDirections="newReportSelectedDirections"
+          v-model:selectedDepartments="newReportSelectedDepartments"
           :report-tab="newReportTab"
           :responsibles="newReportResponsibles"
           :directions="newReportDirections"
+          :departments="newReportDepartmentOptions"
           :loading="newReportsLoading"
           :show-input="newReportDateShowInput"
           :selected-date-iso="newReportSelectedDateIso"
@@ -1096,7 +1098,6 @@
           <template v-slot:item.taskDescriptionDisplay="{ item }">
             <div v-if="newReportTab === '3' || newReportTab === '4'" class="report3-desc-cell">
               <a :href="item.taskUrl" target="_blank" class="task-link d-block">{{ item.title }}</a>
-              <div v-if="item.taskDescriptionBody" class="text-body-2 text-medium-emphasis mt-1">{{ item.taskDescriptionBody }}</div>
             </div>
           </template>
         </v-data-table>
@@ -1157,8 +1158,9 @@ import TheForm from '../components/TheForm/TheForm.vue';
 import NewReportsFilters from '../components/TheForm/NewReportsFilters.vue';
 import DataTableGroupHeaderRepeat from '../components/DataTableGroupHeaderRepeat.vue';
 import moment from 'moment';
-import { callApi, getTaskElapsedItems } from '../functions/callApi';
+import { callApi, getDepartments, getTaskElapsedItems } from '../functions/callApi';
 import * as XLSX from 'xlsx';
+import { TABLE_NAME_COL_MIN_WIDTH } from '../constants/tableColumnWidths.js';
 
 const errorDialog = ref(false);
 const successDialog = ref(false);
@@ -1322,7 +1324,7 @@ const itemsTableHeaders = ref([
         { title: 'id', value: 'id', sortable: true },
         { title: 'Сотрудник', value: 'FULL_NAME', sortable: true },
         { title: 'Статус', value: 'stageId', sortable: true },
-        { title: 'Название', value: 'title', sortable: true },
+        { title: 'Название', value: 'title', sortable: true, minWidth: TABLE_NAME_COL_MIN_WIDTH },
         { title: 'Дата начала', value: 'begindate', sortable: true },
         { title: 'Дата выполнения', value: 'closedate', sortable: true },
         { title: 'Время затрачено', value: 'duration', sortable: true },
@@ -2308,7 +2310,7 @@ const loadTaskUsers = async () => {
   try {
     const usersData = await callApi(
       "user.get",
-      { "ID": [13063, 8951, 489, 9731, 320, 10051, 12031, 9097, 12181, 12603, 12993, 14087, 15401] },
+      { "ID": [13063, 8951, 489, 9731, 320, 12031, 9097, 12181, 12603, 12993, 14087, 15401] },
       [],
       0,
       0,
@@ -2336,7 +2338,7 @@ const loadInvoiceUsers = async () => {
       BX24.callMethod(
         "user.get",
         {
-          "ID": [10051, 11307, 12031, 12603, 12181],
+          "ID": [8951, 11307, 12031, 12603, 12181],
         },
         function(result) {
           if (result.error()) {
@@ -2410,7 +2412,7 @@ const reports = ref([
   },
   {
     id: 6,
-    title: '4. Отчт по поставленным и выполненным задачам',
+    title: '4. Отчет по поставленным и выполненным задачам',
     description: 'Трудозатраты по постановщикам и типам',
     icon: 'mdi-chart-timeline-variant'
   },
@@ -2447,13 +2449,17 @@ const NEW_REPORT_ENTITY_ID = 172;
 const NEW_REPORT_TASK_LINK_FIELD = 'ufCrm47_1701780020523';
 /** Отчёты 4–7 в меню: только эти пользователи (id из Bitrix24) */
 const REPORTS_4_7_ALLOWED_USER_IDS = new Set(['9097', '8639', '320', '8951', '5726', '12031', '12993']);
-const NEW_REPORT_RESPONSIBLE_IDS = ['9097', '12993', '14087', '489', '15401', '12181', '13063', '12031'];
+/** Фильтр ответственных в отчёте 1 (новые отчёты). Справочник id → ФИО: `src/constants/employeeIdReference.js` */
+const NEW_REPORT_RESPONSIBLE_IDS = ['9097', '12993', '14087', '489', '15401', '12181', '13063', '12031', '8951'];
 const newReportTab = ref('1');
 const newReportsLoading = ref(false);
 const newReportResponsibles = ref([]);
 const newReportDirections = ref(['1С', 'Б24', 'ИТ', 'Без направления']);
 const newReportSelectedResponsibles = ref([]);
 const newReportSelectedDirections = ref(['1С', 'Б24', 'ИТ', 'Без направления']);
+/** Отчёт 6 (вкладка 3): множественный фильтр по подразделению (UF, колонка «Подразделение постановщика») */
+const newReportSelectedDepartments = ref([]);
+const newReportDepartmentOptions = ref([]);
 
 const newReportRows = ref([]);
 const newReportSummary = ref({
@@ -2515,7 +2521,12 @@ const newReportHeaders = computed(() => {
       { title: 'Подразделение постановщика', value: 'department', sortable: true },
       { title: 'Тип задачи', value: 'taskType', sortable: true },
       { title: 'Категория задачи', value: 'category', sortable: true },
-      { title: 'Описание задачи', value: 'taskDescriptionDisplay', sortable: false },
+      {
+        title: 'Описание задачи',
+        value: 'taskDescriptionDisplay',
+        sortable: false,
+        minWidth: TABLE_NAME_COL_MIN_WIDTH,
+      },
       { title: 'Суммарные трудозатраты', value: 'durationLabel', sortable: true },
       { title: 'Направление', value: 'direction', sortable: true },
     ];
@@ -2524,7 +2535,12 @@ const newReportHeaders = computed(() => {
     return [
       { title: 'Тип', value: 'taskType', sortable: true },
       { title: 'Категория', value: 'category', sortable: true },
-      { title: 'Описание задачи', value: 'taskDescriptionDisplay', sortable: false },
+      {
+        title: 'Описание задачи',
+        value: 'taskDescriptionDisplay',
+        sortable: false,
+        minWidth: TABLE_NAME_COL_MIN_WIDTH,
+      },
       { title: 'Дата и время постановки задачи', value: 'crmPostanovkaLabel', sortable: true },
       { title: 'Дата и время принятия задачи', value: 'crmAcceptanceLabel', sortable: true },
       { title: 'Дата и время выполнения задачи', value: 'crmExecutionLabel', sortable: true },
@@ -2536,7 +2552,12 @@ const newReportHeaders = computed(() => {
   }
   return [
     { title: newReportTab.value === '2' ? 'Аналитик' : 'Исполнитель', value: 'responsibleName', sortable: true },
-    { title: newReportTab.value === '2' ? 'Тикет' : 'Описание', value: 'title', sortable: true },
+    {
+      title: newReportTab.value === '2' ? 'Тикет' : 'Описание',
+      value: 'title',
+      sortable: true,
+      minWidth: TABLE_NAME_COL_MIN_WIDTH,
+    },
     { title: newReportTab.value === '2' ? 'SLA выполнен' : 'Закрыта в срок', value: 'onTimeLabel', sortable: true },
     { title: newReportTab.value === '2' ? 'Дата/Время приемки' : 'Дата закрытия', value: 'closedDateLabel', sortable: true },
     { title: newReportTab.value === '2' ? 'Дата создания' : 'Крайний срок', value: 'deadlineLabel', sortable: true },
@@ -3273,9 +3294,57 @@ const enrichTasksWithCreatorNames = async (tasks) => {
   });
 };
 
+/** Подгрузка подразделений Bitrix24 (`department.get`) для фильтра и отображения UF по ID */
+const loadNewReportDepartments = async () => {
+  try {
+    const list = await getDepartments();
+    newReportDepartmentOptions.value = [...list].sort((a, b) =>
+      a.name.localeCompare(b.name, 'ru')
+    );
+  } catch (e) {
+    console.warn('department.get:', e);
+    newReportDepartmentOptions.value = [];
+  }
+};
+
+/** Текст в колонке «Подразделение постановщика»: если в UF — ID отдела, подставляем NAME из справочника */
+const formatReport3DepartmentCell = (task) => {
+  const raw = pickTaskUfByNumericId(task, '256949663309');
+  if (raw == null || String(raw).trim() === '') return '—';
+  const s = String(raw).trim();
+  const byId = newReportDepartmentOptions.value.find((d) => d.id === s);
+  if (byId) return byId.name;
+  return s;
+};
+
+const report3TaskMatchesDepartmentFilter = (task, selectedDeptIds) => {
+  if (!selectedDeptIds.size) return true;
+  const raw = pickTaskUfByNumericId(task, '256949663309');
+  const key = raw != null && String(raw).trim() !== '' ? String(raw).trim() : '';
+  if (key && selectedDeptIds.has(key)) return true;
+  if (key) {
+    for (const sid of selectedDeptIds) {
+      const dep = newReportDepartmentOptions.value.find((d) => d.id === String(sid));
+      if (dep && dep.name === key) return true;
+    }
+  }
+  return false;
+};
+
+const formatReport3SelectedDepartmentsSummary = () => {
+  const ids = newReportSelectedDepartments.value;
+  if (!ids.length) return 'все';
+  return ids
+    .map(
+      (id) => newReportDepartmentOptions.value.find((d) => d.id === String(id))?.name ?? String(id)
+    )
+    .join(', ');
+};
+
 const buildReport3 = async () => {
   const { dateFrom, dateTo } = getNewReportDateRange();
   const selectedDirections = new Set(newReportSelectedDirections.value);
+  const selectedDepartmentIds = new Set(newReportSelectedDepartments.value.map(String));
   const dateStart = `${dateFrom}T00:00:00+05:00`;
   const dateEnd = `${dateTo}T23:59:59+05:00`;
 
@@ -3334,6 +3403,8 @@ const buildReport3 = async () => {
     }
   );
 
+  await loadNewReportDepartments();
+
   const rows = [];
   let totalMinutes = 0;
 
@@ -3343,21 +3414,21 @@ const buildReport3 = async () => {
       return;
     }
 
+    if (!report3TaskMatchesDepartmentFilter(task, selectedDepartmentIds)) {
+      return;
+    }
+
+    const department = formatReport3DepartmentCell(task);
+
     const responsibleName = formatReport3CreatorName(task);
     const durationMinutes = getTaskDurationMinutes(task);
     totalMinutes += durationMinutes;
     const hours = Math.floor(durationMinutes / 60);
     const mins = durationMinutes % 60;
-
-    const department = taskUfDisplay(task, '256949663309');
     const taskType = taskUfDisplay(task, '929760312277');
     const category = taskUfDisplay(task, '207470266548');
-    const bodyText = stripHtmlForReport(getTaskDescriptionRaw(task));
     const titleText = getTaskTitleRaw(task);
-    const taskDescriptionBody = bodyText
-      ? (bodyText.length > 500 ? `${bodyText.slice(0, 500)}…` : bodyText)
-      : '';
-    const taskDescriptionDisplay = [titleText, taskDescriptionBody].filter(Boolean).join('\n') || '—';
+    const taskDescriptionDisplay = titleText || '—';
 
     const createdRaw = getTaskCreatedRaw(task);
     const createdMoment = createdRaw ? moment(createdRaw) : null;
@@ -3370,7 +3441,6 @@ const buildReport3 = async () => {
       id: String(task.id),
       taskId: String(task.id),
       title: titleText || '—',
-      taskDescriptionBody,
       taskDescriptionDisplay,
       taskUrl: `${getPortalUrl()}workgroups/group/${task.groupId || NEW_REPORT_GROUP_ID}/tasks/task/view/${task.id}/`,
       responsibleName,
@@ -3408,7 +3478,7 @@ const buildReport3 = async () => {
     report4AvgCompleteLabel: '—',
     report4AvgByTaskType: [],
     report4AvgByCategory: [],
-    text: `Задач: ${rows.length}. Итого суммарные трудозатраты: ${durationLabelTotal} (поле durationFact). Учитываются задачи с датой создания или датой завершения в периоде; статусы не фильтруются. Группировка: постановщик → дата создания (как в «Отчет по задачам»).`,
+    text: ``,
   };
 };
 
@@ -3481,12 +3551,8 @@ const buildReport4 = async () => {
 
     const taskType = taskUfDisplay(task, '929760312277');
     const category = taskUfDisplay(task, '207470266548');
-    const bodyText = stripHtmlForReport(getTaskDescriptionRaw(task));
     const titleText = getTaskTitleRaw(task);
-    const taskDescriptionBody = bodyText
-      ? (bodyText.length > 500 ? `${bodyText.slice(0, 500)}…` : bodyText)
-      : '';
-    const taskDescriptionDisplay = [titleText, taskDescriptionBody].filter(Boolean).join('\n') || '—';
+    const taskDescriptionDisplay = titleText || '—';
 
     const crmItem = linkedMap[String(task.id)];
     const postanovkaRaw = pickCrmRaw(crmItem, LIFECYCLE_UF_POSTANOVKA, '1700467583');
@@ -3538,7 +3604,6 @@ const buildReport4 = async () => {
       taskId: String(task.id),
       status: task.status != null ? Number(task.status) : null,
       title: titleText || '—',
-      taskDescriptionBody,
       taskDescriptionDisplay,
       taskUrl: `${getPortalUrl()}workgroups/group/${task.groupId || NEW_REPORT_GROUP_ID}/tasks/task/view/${task.id}/`,
       taskType,
@@ -3698,6 +3763,7 @@ const exportNewReportToExcel = () => {
           ['Отчет', 'Задачи по постановщикам (группировка: постановщик)'],
           ['Период', `${dateFrom} - ${dateTo}`],
           ['Направления', newReportSelectedDirections.value.length ? newReportSelectedDirections.value.join(', ') : 'Все'],
+          ['Отдел', formatReport3SelectedDepartmentsSummary() === 'все' ? 'Все' : formatReport3SelectedDepartmentsSummary()],
           ['Задач в отчёте', newReportSummary.value.completed],
           ['Суммарные трудозатраты', newReportSummary.value.report3DurationLabel || '—'],
           ['Комментарий', newReportSummary.value.text],
@@ -3746,13 +3812,12 @@ const exportNewReportToExcel = () => {
 
 // Заголовки таблицы для детализированного отчета по задачам
 const tasksDetailedTableHeaders = ref([
-  { title: 'Наименование', value: 'title', sortable: true, width: '300px' },
-  { title: 'Статус', value: 'statusLabel', sortable: true, width: '150px' },
-  { title: 'Постановщик', value: 'creatorFullName', sortable: true, width: '200px' },
-  { title: 'Время затрачено', value: 'timeSpentInLogs', sortable: true, width: '150px' },
-  { title: 'Дата создания', value: 'createdDateFormatted', sortable: true, width: '150px' },
-  { title: 'Дедлайн', value: 'deadlineFormatted', sortable: true, width: '150px' },
-  //{ title: 'Приоритет', value: 'priorityLabel', sortable: true, width: '120px' },
+  { title: 'Наименование', value: 'title', sortable: true, minWidth: TABLE_NAME_COL_MIN_WIDTH },
+  { title: 'Статус', value: 'statusLabel', sortable: true },
+  { title: 'Постановщик', value: 'creatorFullName', sortable: true },
+  { title: 'Время затрачено', value: 'timeSpentInLogs', sortable: true },
+  { title: 'Дата создания', value: 'createdDateFormatted', sortable: true },
+  { title: 'Дедлайн', value: 'deadlineFormatted', sortable: true },
 ]);
 // Обновленная функция для получения записей времени для Excel с сортировкой по дате создания
 const getTimeRecordsForExcel = async (taskIds, selectedUsers, dateRange) => {
@@ -4359,7 +4424,7 @@ const TASK_STATUS_LABELS = {
 
 // Заголовки таблицы задач (тот же порядок, что в exportTasksToExcel → excelData)
 const tasksTableHeaders = ref([
-  { title: 'Наименование', value: 'title', sortable: true },
+  { title: 'Наименование', value: 'title', sortable: true, minWidth: TABLE_NAME_COL_MIN_WIDTH },
   { title: 'Статус', value: 'statusLabel', sortable: true },
   { title: 'Постановщик', value: 'creatorFullName', sortable: true },
   { title: 'Исполнитель', value: 'originalResponsibleFullName', sortable: true },
@@ -4854,9 +4919,18 @@ watch(newReportsDialog, async (newVal) => {
       console.error('Ошибка загрузки фильтров новых отчетов:', error);
     }
   }
+  if (newVal && newReportTab.value === '3') {
+    try {
+      await loadNewReportDepartments();
+    } catch (e) {
+      console.warn('department.get:', e);
+    }
+  }
 });
-watch(newReportTab, () => {
+watch(newReportTab, async () => {
   newReportRows.value = [];
+  newReportSelectedDepartments.value = [];
+  newReportDepartmentOptions.value = [];
   newReportSummary.value = {
     completed: 0,
     overdue: 0,
@@ -4869,6 +4943,13 @@ watch(newReportTab, () => {
     report4AvgByCategory: [],
     text: ''
   };
+  if (newReportsDialog.value && newReportTab.value === '3') {
+    try {
+      await loadNewReportDepartments();
+    } catch (e) {
+      console.warn('department.get:', e);
+    }
+  }
 });
 // Сбрасываем выбор при закрытии диалога
 watch(reportsDialog, (newVal) => {
@@ -5002,9 +5083,6 @@ watch(reportsDialog, (newVal) => {
     font-size: 11px
     color: #7f8c8d
     text-align: center
-
-  tr td:nth-child(5)
-    min-width: 17rem
 
   td
     padding-top: 0.5rem !important

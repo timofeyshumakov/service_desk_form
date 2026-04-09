@@ -62,6 +62,37 @@
           <v-divider class="mb-1" />
         </template>
       </v-autocomplete>
+      <v-autocomplete
+        v-if="reportTab === '3'"
+        v-model="selectedDepartments"
+        :items="departments"
+        item-title="name"
+        item-value="id"
+        single-line
+        label="Отдел"
+        variant="outlined"
+        density="compact"
+        multiple
+        chips
+        clearable
+        no-data-text="Нет отделов (department.get)"
+      >
+        <template v-slot:prepend-item>
+          <v-list-item @click="toggleAllDepartments">
+            <template v-slot:prepend>
+              <v-checkbox
+                :model-value="isAllDepartmentsSelected"
+                :indeterminate="isDepartmentsIndeterminate"
+                hide-details
+                density="compact"
+                @click.stop
+              />
+            </template>
+            <v-list-item-title>Выбрать все отделы</v-list-item-title>
+          </v-list-item>
+          <v-divider class="mb-1" />
+        </template>
+      </v-autocomplete>
   </v-form>
   <v-btn color="primary" block :loading="loading" @click="emit('submit')">
     Показать отчет
@@ -85,6 +116,11 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  /** Справочник отделов Bitrix24: { id, name } из department.get */
+  departments: {
+    type: Array,
+    default: () => [],
+  },
   loading: {
     type: Boolean,
     default: false,
@@ -103,6 +139,7 @@ const emit = defineEmits(['send-date', 'submit']);
 
 const selectedResponsibles = defineModel('selectedResponsibles', { default: () => [] });
 const selectedDirections = defineModel('selectedDirections', { default: () => [] });
+const selectedDepartments = defineModel('selectedDepartments', { default: () => [] });
 
 const responsiblesIds = computed(() => props.responsibles.map((u) => u.id));
 
@@ -145,6 +182,33 @@ const toggleAllDirections = () => {
     selectedDirections.value = [];
   } else {
     selectedDirections.value = [...props.directions];
+  }
+};
+
+const departmentRows = computed(() =>
+  (props.departments || []).filter((d) => d && d.id != null && d.id !== '')
+);
+
+const departmentIds = computed(() => departmentRows.value.map((d) => String(d.id)));
+
+const isAllDepartmentsSelected = computed(() => {
+  const ids = departmentIds.value;
+  if (!ids.length) return false;
+  const sel = new Set(selectedDepartments.value.map(String));
+  return ids.every((id) => sel.has(id));
+});
+
+const isDepartmentsIndeterminate = computed(() => {
+  const n = selectedDepartments.value.length;
+  const t = departmentIds.value.length;
+  return t > 0 && n > 0 && n < t;
+});
+
+const toggleAllDepartments = () => {
+  if (isAllDepartmentsSelected.value) {
+    selectedDepartments.value = [];
+  } else {
+    selectedDepartments.value = [...departmentIds.value];
   }
 };
 </script>

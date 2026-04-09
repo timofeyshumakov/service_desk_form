@@ -206,6 +206,7 @@ import { callApi } from '../functions/callApi';
 import { useChat } from '../composables/useChat';
 import { useDeals } from '../composables/useDeals';
 import { useFilters } from '../composables/useFilters';
+import { TABLE_NAME_COL_MIN_WIDTH } from './constants/tableColumnWidths.js';
 
 const errorDialog = ref(false);
 const successDialog = ref(false);
@@ -249,7 +250,7 @@ const itemsTableHeaders = ref([
         { title: 'id', value: 'id', sortable: true },
         { title: 'Исполнитель', value: 'FULL_NAME', sortable: true },
         { title: 'Статус', value: 'stageId', sortable: true },
-        { title: 'Название', value: 'title', sortable: true },
+        { title: 'Название', value: 'title', sortable: true, minWidth: TABLE_NAME_COL_MIN_WIDTH },
         { title: 'Дата начала', value: 'begindate', sortable: true },
         { title: 'Дата выполнения', value: 'closedate', sortable: true },
         { title: 'Время затрачено', value: 'duration', sortable: true },

@@ -1,6 +1,7 @@
 // composables/useCompaniesTable.js
 import { ref, computed, watch } from 'vue'
 import { callApi } from '../functions/callApi'
+import { TABLE_NAME_COL_MIN_WIDTH } from '../constants/tableColumnWidths.js'
 
 export function useCompaniesTable() {
   const items = ref([])
@@ -11,8 +12,8 @@ export function useCompaniesTable() {
 
   // Базовые заголовки
   const baseHeaders = [
-    { title: 'Мероприятие', key: 'EVENT', width: '25%' },
-    { title: 'Компания', key: 'COMPANY_ID' }
+    { title: 'Мероприятие', key: 'EVENT', width: '25%', minWidth: TABLE_NAME_COL_MIN_WIDTH },
+    { title: 'Компания', key: 'COMPANY_ID', minWidth: TABLE_NAME_COL_MIN_WIDTH },
   ]
 
   // Все заголовки (с учетом вложенных)
@@ -84,7 +85,7 @@ export function useCompaniesTable() {
       headers.value = [
         ...baseHeaders,
         ...generateYearHeaders(uniqueYears),
-        { title: 'Сумма', key: 'total', width: '25%' }
+        { title: 'Сумма', key: 'total', width: '25%' },
       ]
 
       // Обрабатываем массивы в свойствах

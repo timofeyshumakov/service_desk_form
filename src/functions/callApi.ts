@@ -241,3 +241,36 @@ export async function getListElements(
 ): Promise<any[]> {
     return callApi('lists.element.get', filter, select, iblockId, 0, 0);
 }
+
+/** Список подразделений портала Bitrix24 (`department.get`). Вне iframe / без BX24 — []. */
+export async function getDepartments(): Promise<Array<{ id: string; name: string }>> {
+    return new Promise((resolve) => {
+        // @ts-ignore
+        if (typeof BX24 === 'undefined' || typeof BX24.callMethod !== 'function') {
+            resolve([]);
+            return;
+        }
+        // @ts-ignore
+        BX24.callMethod(
+            'department.get',
+            { sort: 'NAME', order: 'DESC' },
+            (res: any) => {
+                if (res.error && res.error()) {
+                    console.error('department.get', res.error());
+                    resolve([]);
+                    return;
+                }
+                const data = typeof res.data === 'function' ? res.data() : res.data;
+                const arr = Array.isArray(data) ? data : [];
+                resolve(
+                    arr
+                        .map((d: any) => ({
+                            id: String(d.ID ?? d.id ?? ''),
+                            name: String(d.NAME ?? d.name ?? '').trim() || String(d.ID ?? ''),
+                        }))
+                        .filter((x: { id: string }) => x.id !== '')
+                );
+            }
+        );
+    });
+}

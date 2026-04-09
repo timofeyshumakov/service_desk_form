@@ -106,3 +106,24 @@ h1
 .v-table th,
 .v-table td
     text-align: left !important
+
+// Ширина колонок по содержимому: чем длиннее текст — тем шире колонка; без обрезки ellipsis
+.v-data-table
+  .v-table__wrapper
+    overflow-x: auto
+    width: 100%
+  .v-data-table__table
+    width: max-content !important
+    min-width: min-content
+    table-layout: auto !important
+  // Vuetify для nowrap: overflow hidden + ellipsis — колонка не растягивается; показываем весь текст
+  th.v-data-table-column--nowrap,
+  td.v-data-table-column--nowrap
+    overflow: visible !important
+    text-overflow: clip !important
+    max-width: none !important
+  // Снимаем потолок ширины у ячеек, чтобы не срабатывал ellipsis/фикс. maxWidth из колонки
+  .v-data-table__th,
+  .v-data-table__td
+    max-width: none !important
+    overflow: visible !important
