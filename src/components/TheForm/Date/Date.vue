@@ -241,8 +241,8 @@ export default {
                 break;
             }
 
-            this.selectedDateIso[0] = this.selectedDate[0] ? this.selectedDate[0].subtract(12, 'hours').toISOString() : null;
-            this.selectedDateIso[1] = this.selectedDate[1] ? this.selectedDate[1].add(12, 'hours').toISOString() : null;
+            this.selectedDateIso[0] = this.selectedDate[0] ? this.selectedDate[0].clone().subtract(12, 'hours').toISOString() : null;
+            this.selectedDateIso[1] = this.selectedDate[1] ? this.selectedDate[1].clone().add(12, 'hours').toISOString() : null;
             console.log(this.selectedDateIso);
             this.$emit('update:selectedDateIso[0]', this.selectedDateIso[0]);
             this.$emit('update:selectedDateIso[1]', this.selectedDateIso[1]);

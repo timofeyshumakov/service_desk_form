@@ -2631,8 +2631,10 @@ const getNewReportDateRange = () => {
   }
   const rawFrom = rawRange.slice(0, commaIdx).trim();
   const rawTo = rawRange.slice(commaIdx + 1).trim();
-  const from = rawFrom ? rawFrom.split('T')[0] : '';
-  const to = rawTo ? rawTo.split('T')[0] : '';
+  const parsedFromM = rawFrom ? moment(rawFrom) : null;
+  const parsedToM = rawTo ? moment(rawTo) : null;
+  const from = parsedFromM && parsedFromM.isValid() ? parsedFromM.format('YYYY-MM-DD') : '';
+  const to = parsedToM && parsedToM.isValid() ? parsedToM.format('YYYY-MM-DD') : '';
 
   if (from && to) {
     if (moment(from).isAfter(moment(to))) {
@@ -4126,8 +4128,16 @@ const handleDetailedTasksData = async (tasks) => {
     let dateFromStr;
     let dateToStr;
     if (filteredDate.length >= 2 && filteredDate[0] && filteredDate[1]) {
-      dateFromStr = filteredDate[0].split('T')[0];
-      dateToStr = filteredDate[1].split('T')[0];
+      const dfM = moment(filteredDate[0].trim());
+      const dtM = moment(filteredDate[1].trim());
+      if (dfM.isValid() && dtM.isValid()) {
+        dateFromStr = dfM.format('YYYY-MM-DD');
+        dateToStr = dtM.format('YYYY-MM-DD');
+      } else {
+        const [a, b] = getIsoRangeForCurrentWeek();
+        dateFromStr = moment(a).format('YYYY-MM-DD');
+        dateToStr = moment(b).format('YYYY-MM-DD');
+      }
     } else {
       const [a, b] = getIsoRangeForCurrentWeek();
       dateFromStr = moment(a).format('YYYY-MM-DD');
@@ -4448,8 +4458,16 @@ const handleTasksData = async (tasks) => {
     let dateFromStr;
     let dateToStr;
     if (filteredDate.length >= 2 && filteredDate[0] && filteredDate[1]) {
-      dateFromStr = filteredDate[0].split('T')[0];
-      dateToStr = filteredDate[1].split('T')[0];
+      const dfM = moment(filteredDate[0].trim());
+      const dtM = moment(filteredDate[1].trim());
+      if (dfM.isValid() && dtM.isValid()) {
+        dateFromStr = dfM.format('YYYY-MM-DD');
+        dateToStr = dtM.format('YYYY-MM-DD');
+      } else {
+        const [a, b] = getIsoRangeForCurrentWeek();
+        dateFromStr = moment(a).format('YYYY-MM-DD');
+        dateToStr = moment(b).format('YYYY-MM-DD');
+      }
     } else {
       const [a, b] = getIsoRangeForCurrentWeek();
       dateFromStr = moment(a).format('YYYY-MM-DD');
