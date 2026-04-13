@@ -2476,10 +2476,10 @@ const newReportSummary = ref({
 
 const newReportDateShowInput = ref([false, false, false, false, false, false, false]);
 
-/** Как в Date.vue (пресет «Текущая неделя») — единый дефолт периода для новых отчётов */
+/** Как в Date.vue (пресет «Текущая неделя»): ISO-неделя пн–вс, без сдвига endOf(week)+36h из локали en (вс–сб). */
 const getIsoRangeForCurrentWeek = () => {
-  const d0 = moment().startOf('week').add(1, 'days');
-  const d1 = moment().endOf('week').add(36, 'hours');
+  const d0 = moment().startOf('isoWeek');
+  const d1 = moment().endOf('isoWeek');
   return [d0.clone().subtract(12, 'hours').toISOString(), d1.clone().add(12, 'hours').toISOString()];
 };
 

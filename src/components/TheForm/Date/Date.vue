@@ -123,8 +123,8 @@ export default {
                 this.selectedDate[1] = moment().startOf('day');
                 break;
             case "Текущая неделя":
-                this.selectedDate[0] = moment().startOf('week').add(1, 'days');
-                this.selectedDate[1] = moment().endOf('week').add(36, 'hours');
+                this.selectedDate[0] = moment().startOf('isoWeek');
+                this.selectedDate[1] = moment().endOf('isoWeek');
                 break;
             case "Текущий месяц":
                 this.selectedDate[0] = moment().startOf('month').add(12, 'hours');
