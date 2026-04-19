@@ -731,6 +731,7 @@
         v-else
         :items="tasksDetailedTableDate" 
         :headers="tasksDetailedTableHeaders" 
+        item-value="uniqueKey"
         :group-by="[{ key: 'responsibleFullName', order: 'asc' }]" 
         items-per-page="-1" 
         hide-default-footer
@@ -986,8 +987,8 @@
                     </div>
                     -->
                     <div class="stat-item">
-                      <span class="stat-number">{{ getReport7TypeSummary(item.value).totalAcceptHours }}</span>
-                      <span class="stat-label">Σ срок принятия, ч</span>
+                      <span class="stat-number">{{ getReport7TypeSummary(item.value).avgAcceptHours }}</span>
+                      <span class="stat-label">Средний срок принятия, ч</span>
                     </div>
                   </div>
                 </div>
@@ -1000,7 +1001,7 @@
                   />
                   <span class="text-body-2 font-weight-medium">Категория: {{ item.value }}</span>
                   <span class="text-caption text-medium-emphasis ml-2">
-                    задач: {{ countReport4GroupRows(item) }}, Σ срок принятия: {{ getReport7CategoryAcceptHours(item) }} ч
+                    задач: {{ countReport4GroupRows(item) }}, средний срок принятия: {{ getReport7CategoryAcceptHours(item) }} ч
                   </span>
                 </div>
               </td>
@@ -3166,22 +3167,21 @@ const getReport3PostanovshikSummary = (responsibleName) => {
   };
 };
 
-/** Сводка по типу (отчёт 7): как блок показателей у постановщика в отчёте 3 */
+/** Сводка по типу (отчёт 5 / жизненный цикл): средний срок принятия по задачам типа, ч */
 const getReport7TypeSummary = (taskType) => {
   const userRows = newReportRows.value.filter((r) => r.taskType === taskType);
-  const totalAcceptHours = userRows.reduce(
-    (sum, r) => sum + Number(r.acceptDurationMs || 0) / 3600000,
-    0
-  );
+  const n = userRows.length;
+  const sumAcceptMs = userRows.reduce((sum, r) => sum + Number(r.acceptDurationMs || 0), 0);
+  const avgAcceptHours = n > 0 ? sumAcceptMs / n / 3600000 : 0;
   const completedTasks = userRows.filter((t) => t.status == 5).length;
   const inProgressTasks = userRows.filter((t) => t.status == 3).length;
   const newTasks = userRows.filter((t) => t.status == 1 || t.status == 2).length;
   return {
-    totalTasks: userRows.length,
+    totalTasks: n,
     completedTasks,
     inProgressTasks,
     newTasks,
-    totalAcceptHours: totalAcceptHours.toFixed(2),
+    avgAcceptHours: avgAcceptHours.toFixed(2),
   };
 };
 
@@ -3812,10 +3812,18 @@ const exportNewReportToExcel = () => {
 };
 
 // Заголовки таблицы для детализированного отчета по задачам
+/** См. handleTasksData: день записи времени для разнесения по дням */
+const getElapsedRecordDayKey = (createdRaw) => {
+  if (createdRaw == null || createdRaw === '') return '—';
+  const m = moment(createdRaw);
+  return m.isValid() ? m.format('YYYY-MM-DD') : '—';
+};
+
 const tasksDetailedTableHeaders = ref([
   { title: 'Наименование', value: 'title', sortable: true, minWidth: TABLE_NAME_COL_MIN_WIDTH },
   { title: 'Статус', value: 'statusLabel', sortable: true },
   { title: 'Постановщик', value: 'creatorFullName', sortable: true },
+  { title: 'День учёта времени', value: 'timeLogDayLabel', sortable: true },
   { title: 'Время затрачено', value: 'timeSpentInLogs', sortable: true },
   { title: 'Дата создания', value: 'createdDateFormatted', sortable: true },
   { title: 'Дедлайн', value: 'deadlineFormatted', sortable: true },
@@ -4160,31 +4168,31 @@ const handleDetailedTasksData = async (tasks) => {
 
     // Получаем ID пользователей из taskUsers для фильтрации
     const taskUserIds = invoiceUsers.value.map(user => user.ID.toString());
-    // Группируем записи времени по задачам и пользователям (только для taskUsers)
-    const taskTimeByUser = {};
-    const taskUserRecords = {}; // Для отслеживания пользователей, работавших над задачами
-    
+    /** задача → пользователь → календарный день записи → сумма секунд */
+    const taskTimeByUserDay = {};
+
     elapsedItems.forEach(item => {
       const taskId = item.TASK_ID;
       const userId = item.USER_ID.toString();
       const seconds = parseInt(item.SECONDS) || 0;
-      
-      // Фильтруем только пользователей из taskUsers
+      const createdRaw = item.CREATED_DATE ?? item.createdDate;
+      const dayKey = getElapsedRecordDayKey(createdRaw);
+
       if (!taskUserIds.includes(userId)) {
         return;
       }
-      
-      if (!taskTimeByUser[taskId]) {
-        taskTimeByUser[taskId] = {};
-        taskUserRecords[taskId] = new Set(); // Для отслеживания уникальных пользователей
+
+      if (!taskTimeByUserDay[taskId]) {
+        taskTimeByUserDay[taskId] = {};
       }
-      
-      if (!taskTimeByUser[taskId][userId]) {
-        taskTimeByUser[taskId][userId] = 0;
+      if (!taskTimeByUserDay[taskId][userId]) {
+        taskTimeByUserDay[taskId][userId] = {};
       }
-      
-      taskTimeByUser[taskId][userId] += seconds;
-      taskUserRecords[taskId].add(userId);
+      if (!taskTimeByUserDay[taskId][userId][dayKey]) {
+        taskTimeByUserDay[taskId][userId][dayKey] = 0;
+      }
+
+      taskTimeByUserDay[taskId][userId][dayKey] += seconds;
     });
 
     // Получаем детальную информацию о задачах
@@ -4212,9 +4220,8 @@ const handleDetailedTasksData = async (tasks) => {
     // Создаем массив для хранения финальных данных с дублированием задач по пользователям
     const detailedTasksWithUsers = [];
 
-    // Обрабатываем каждую задачу, для которой есть записи времени
-    Object.keys(taskTimeByUser).forEach(taskId => {
-      const timeRecords = taskTimeByUser[taskId];
+    Object.keys(taskTimeByUserDay).forEach(taskId => {
+      const userDayMap = taskTimeByUserDay[taskId];
       const task = tasksDetailedData.find(t => t.id == taskId) || {
         id: taskId,
         title: `Задача ${taskId}`,
@@ -4224,9 +4231,9 @@ const handleDetailedTasksData = async (tasks) => {
         priority: 2
       };
 
-      // Создаем отдельную запись для каждого пользователя из taskUsers, который работал над задачей
-      Object.entries(timeRecords).forEach(([userId, totalSeconds]) => {
-        
+      Object.entries(userDayMap).forEach(([userId, dayBuckets]) => {
+      Object.entries(dayBuckets).forEach(([dayKey, totalSeconds]) => {
+
         // Находим пользователя в taskUsers
         const workingUser = invoiceUsers.value.find(user => user.ID.toString() === userId);
         
@@ -4271,8 +4278,13 @@ const handleDetailedTasksData = async (tasks) => {
         
         // Конвертируем секунды в часы
         const timeSpentHours = Math.round((totalSeconds / 3600) * 100) / 100;
-        
-        // Создаем уникальную запись для комбинации задача-пользователь
+
+        const timeLogDayLabel =
+          dayKey !== '—'
+            ? moment(dayKey, 'YYYY-MM-DD').format('DD.MM.YYYY')
+            : '—';
+
+        // Создаем уникальную запись для комбинации задача-пользователь-день
         detailedTasksWithUsers.push({
           ...task,
           // В качестве ответственного указываем пользователя, который вносил время
@@ -4283,13 +4295,15 @@ const handleDetailedTasksData = async (tasks) => {
           priorityLabel,
           createdDateFormatted,
           deadlineFormatted,
+          timeLogDayLabel,
           timeSpentInLogs: timeSpentHours,
           timeSpentSeconds: totalSeconds,
           originalResponsibleFullName: responsibleFullName, // Сохраняем оригинального ответственного
           isTimeContributor: true, // Флаг, что это запись о времени пользователя
           workingUserId: parseInt(userId), // ID пользователя, который работал над задачей
-          uniqueKey: `${task.id}_${userId}` // Уникальный ключ для идентификации
+          uniqueKey: `${task.id}_${userId}_${dayKey}`,
         });
+      });
       });
     });
 
@@ -4446,6 +4460,7 @@ const tasksTableHeaders = ref([
   { title: 'Пользователь (запись)', value: 'timeLogUserFullName', sortable: true },
   { title: 'Тип обращения', value: 'taskTypeUfLabel', sortable: true },
 ]);
+
 const handleTasksData = async (tasks) => {
  try {
     tasksLoading.value = true;
@@ -4548,25 +4563,28 @@ const handleTasksData = async (tasks) => {
       }
     //}
 
-    // 4. Группируем записи времени по задачам и пользователям (секунды + даты создания записей)
-    const taskTimeByUser = {};
+    // 4. Группируем записи по задаче, пользователю и календарному дню записи (разные дни → разные строки)
+    const taskTimeByUserDay = {};
 
     elapsedItems.forEach((item) => {
       const taskId = item.TASK_ID;
       const userId = item.USER_ID.toString();
       const seconds = parseInt(item.SECONDS) || 0;
-
-      if (!taskTimeByUser[taskId]) {
-        taskTimeByUser[taskId] = {};
-      }
-
-      if (!taskTimeByUser[taskId][userId]) {
-        taskTimeByUser[taskId][userId] = { totalSeconds: 0, recordDates: [] };
-      }
-
-      const bucket = taskTimeByUser[taskId][userId];
-      bucket.totalSeconds += seconds;
       const createdRaw = item.CREATED_DATE ?? item.createdDate;
+      const dayKey = getElapsedRecordDayKey(createdRaw);
+
+      if (!taskTimeByUserDay[taskId]) {
+        taskTimeByUserDay[taskId] = {};
+      }
+      if (!taskTimeByUserDay[taskId][userId]) {
+        taskTimeByUserDay[taskId][userId] = {};
+      }
+      if (!taskTimeByUserDay[taskId][userId][dayKey]) {
+        taskTimeByUserDay[taskId][userId][dayKey] = { totalSeconds: 0, recordDates: [] };
+      }
+
+      const bucket = taskTimeByUserDay[taskId][userId][dayKey];
+      bucket.totalSeconds += seconds;
       if (createdRaw) {
         bucket.recordDates.push(createdRaw);
       }
@@ -4575,9 +4593,8 @@ const handleTasksData = async (tasks) => {
     // 5. Формируем финальный массив данных для таблицы
     const finalTasksData = [];
 
-    // Обрабатываем каждую задачу, для которой есть записи времени
-    Object.keys(taskTimeByUser).forEach(taskId => {
-      const timeRecords = taskTimeByUser[taskId];
+    Object.keys(taskTimeByUserDay).forEach((taskId) => {
+      const userDayMap = taskTimeByUserDay[taskId];
       const task = tasksDetailedData.find(t => t.id == taskId) || {
         id: taskId,
         title: `Задача ${taskId}`,
@@ -4588,8 +4605,8 @@ const handleTasksData = async (tasks) => {
         taskTypeUfLabel: '',
       };
 
-      // Создаем отдельную запись для каждого пользователя, который работал над задачей
-      Object.entries(timeRecords).forEach(([userId, agg]) => {
+      Object.entries(userDayMap).forEach(([userId, dayBuckets]) => {
+        Object.entries(dayBuckets).forEach(([dayKey, agg]) => {
         const totalSeconds = agg.totalSeconds;
         const recordDates = agg.recordDates || [];
         const validRecordDates = recordDates
@@ -4610,7 +4627,7 @@ const handleTasksData = async (tasks) => {
           }
           const first = validRecordDates[0];
           const last = validRecordDates[validRecordDates.length - 1];
-          if (first.isSame(last)) {
+          if (first.isSame(last, 'day')) {
             return first.format('DD.MM.YYYY HH:mm:ss');
           }
           return `${first.format('DD.MM.YYYY HH:mm:ss')} — ${last.format('DD.MM.YYYY HH:mm:ss')}`;
@@ -4652,9 +4669,10 @@ const handleTasksData = async (tasks) => {
         // Форматируем даты
         const createdDateFormatted = task.createdDate ? 
           moment(task.createdDate).format('DD.MM.YYYY HH:mm') : 'Не указана';
-        const recordCreatedDateGroup = validRecordDates.length
-          ? validRecordDates[0].format('YYYY-MM-DD')
-          : '—';
+        const recordCreatedDateGroup =
+          dayKey !== '—' ? dayKey : validRecordDates.length
+            ? validRecordDates[0].format('YYYY-MM-DD')
+            : '—';
         const deadlineFormatted = task.deadline ? moment(task.deadline).format('DD.MM.YYYY HH:mm') : 'Не указан';
         
         // Конвертируем секунды в часы
@@ -4681,7 +4699,8 @@ const handleTasksData = async (tasks) => {
           taskTypeUfLabel: task.taskTypeUfLabel ?? '',
           isTimeContributor: true, // Флаг, что это запись о времени пользователя
           workingUserId: parseInt(userId), // ID пользователя, который работал над задачей
-          uniqueKey: `${task.id}_${userId}` // Уникальный ключ для идентификации
+          uniqueKey: `${task.id}_${userId}_${recordCreatedDateGroup}`,
+        });
         });
       });
     });
@@ -4803,11 +4822,13 @@ const getDateSubgroupTaskCount = (group) => {
   return new Set(rows.map((r) => r.id)).size;
 };
 
-/** Подгруппа «категория» в отчёте 7: сумма сроков принятия (часы) */
+/** Подгруппа «категория» в отчёте 5: средний срок принятия (часы) */
 const getReport7CategoryAcceptHours = (group) => {
   const rows = collectTaskRowsFromDataTableGroup(group);
+  const n = rows.length;
+  if (!n) return '0.00';
   const sumMs = rows.reduce((acc, r) => acc + Number(r.acceptDurationMs || 0), 0);
-  return (sumMs / 3600000).toFixed(2);
+  return (sumMs / n / 3600000).toFixed(2);
 };
 
 const getDateSubgroupTimeSpent = (group) => {

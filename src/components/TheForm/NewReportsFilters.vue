@@ -27,7 +27,7 @@
                 :indeterminate="isResponsiblesIndeterminate"
                 hide-details
                 density="compact"
-                @click.stop
+                @click.stop="toggleAllResponsibles"
               />
             </template>
             <v-list-item-title>Выбрать всех ответственных</v-list-item-title>
@@ -54,7 +54,7 @@
                 :indeterminate="isDirectionsIndeterminate"
                 hide-details
                 density="compact"
-                @click.stop
+                @click.stop="toggleAllDirections"
               />
             </template>
             <v-list-item-title>Выбрать все направления</v-list-item-title>
@@ -85,7 +85,7 @@
                 :indeterminate="isDepartmentsIndeterminate"
                 hide-details
                 density="compact"
-                @click.stop
+                @click.stop="toggleAllDepartments"
               />
             </template>
             <v-list-item-title>Выбрать все отделы</v-list-item-title>

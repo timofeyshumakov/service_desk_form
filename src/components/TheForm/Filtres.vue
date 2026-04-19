@@ -26,7 +26,7 @@
                         v-checkbox(
                             :label="selectAllLabel"
                             :modelValue="selectedAllUsers"
-                            @change="toggleSelectAllUsers()"
+                            @click.stop="toggleSelectAllUsers()"
                         )
 </template>
 
