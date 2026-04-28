@@ -1100,6 +1100,43 @@
               <a :href="item.taskUrl" target="_blank" class="task-link d-block">{{ item.title }}</a>
             </div>
           </template>
+          <template v-slot:item.stageTimeline="{ item }">
+            <div v-if="newReportTab === '4'" class="d-inline-flex">
+              <v-menu location="bottom start">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" size="small" variant="outlined" color="primary">Стадии</v-btn>
+                </template>
+                <div class="pa-2 bg-white rounded border" style="min-width: 560px">
+                  <v-table density="compact">
+                    <thead>
+                      <tr>
+                        <th class="text-left">Стадия</th>
+                        <th class="text-left">Дата и время начала</th>
+                        <th class="text-left">Дата и время окончания</th>
+                        <th class="text-left">Длительность</th>
+                      </tr>
+                    </thead>
+                    <tbody v-if="Array.isArray(item.stageTimeline) && item.stageTimeline.length">
+                      <tr
+                        v-for="stage in item.stageTimeline"
+                        :key="`${item.taskId}-${stage.key}`"
+                      >
+                        <td>{{ stage.label }}</td>
+                        <td>{{ stage.startDateLabel }}</td>
+                        <td>{{ stage.endDateLabel }}</td>
+                        <td>{{ stage.durationLabel }}</td>
+                      </tr>
+                    </tbody>
+                    <tbody v-else>
+                      <tr>
+                        <td colspan="4">Нет данных по стадиям</td>
+                      </tr>
+                    </tbody>
+                  </v-table>
+                </div>
+              </v-menu>
+            </div>
+          </template>
         </v-data-table>
 
         <div
@@ -2541,6 +2578,7 @@ const newReportHeaders = computed(() => {
         sortable: false,
         minWidth: TABLE_NAME_COL_MIN_WIDTH,
       },
+      { title: 'Стадии', value: 'stageTimeline', sortable: false },
       { title: 'Дата и время постановки задачи', value: 'crmPostanovkaLabel', sortable: true },
       { title: 'Дата и время принятия задачи', value: 'crmAcceptanceLabel', sortable: true },
       { title: 'Дата и время выполнения задачи', value: 'crmExecutionLabel', sortable: true },
@@ -3057,6 +3095,37 @@ const formatDurationFromMs = (ms) => {
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return `${h} ч ${m} мин`;
+};
+
+const buildReport7StageTimeline = (postanovkaM, acceptM, execM, closedM) => {
+  const stages = [
+    { key: 'postanovka', label: 'Постановка', at: postanovkaM },
+    { key: 'accept', label: 'Принятие', at: acceptM },
+    { key: 'exec', label: 'Выполнение', at: execM },
+    { key: 'closed', label: 'Закрытие', at: closedM },
+  ];
+
+  return stages.map((stage, index) => {
+    const next = stages[index + 1]?.at ?? null;
+    let durationMs = null;
+    if (
+      stage.at &&
+      next &&
+      stage.at.isValid() &&
+      next.isValid() &&
+      next.valueOf() >= stage.at.valueOf()
+    ) {
+      durationMs = next.diff(stage.at);
+    }
+
+    return {
+      key: stage.key,
+      label: stage.label,
+      startDateLabel: stage.at && stage.at.isValid() ? stage.at.format('DD.MM.YYYY HH:mm') : '—',
+      endDateLabel: next && next.isValid() ? next.format('DD.MM.YYYY HH:mm') : '—',
+      durationLabel: formatDurationFromMs(durationMs),
+    };
+  });
 };
 
 const averagePositiveMs = (values) => {
@@ -3613,6 +3682,7 @@ const buildReport4 = async () => {
       crmAcceptanceLabel,
       crmExecutionLabel,
       taskClosedAtLabel,
+      stageTimeline: buildReport7StageTimeline(postanovkaM, acceptM, execM, closedM),
       acceptDurationLabel: formatDurationFromMs(acceptDurationMs),
       completeDurationLabel: formatDurationFromMs(completeDurationMs),
       acceptDurationMs,
